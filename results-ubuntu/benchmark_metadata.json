@@ -1,0 +1,13 @@
+{
+  "platform": "Linux",
+  "timer": "CLOCK_MONOTONIC",
+  "reads_per_scan": 200000,
+  "buffer_bytes": 268435456,
+  "repetitions": 30,
+  "warmup_rounds": 3,
+  "line_bytes_cpuid": 64,
+  "logical_cpu": 0,
+  "binary_bits": 64,
+  "compiler": "GCC 11.4.0",
+  "shuffle_seed": 20261105
+}
