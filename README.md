@@ -31,3 +31,20 @@ place of `results-new` to keep earlier runs.
 measurements, `benchmark_metadata.json` holds the run settings, and
 `timer_overhead.csv` holds the timer check. Keep them together in the results
 folder so the Python script can read them.
+
+## Week 2: building the simple hash join
+
+In [Week 2](week%202/README.md), we moved from scanning bytes to joining two
+tables. We implemented a simple hash join, checked it against a nested-loop
+reference, and measured how much time it spent building the hash table and
+searching it for matches.
+
+The saved experiment uses one thread and five input sizes, from 10,000 to
+2,000,000 rows in each table, with seven recorded runs per size. At the
+largest size, probing took about 74.5% of the mean join time. This gives us
+a baseline for checking whether radix partitioning can make the local
+lookups faster while still paying for its extra preparation.
+
+The folder contains the C implementation, plotting script, recorded timings,
+run settings, system information and [Week 2 report](week%202/results/report.pdf).
+Its README explains how to plot the saved results or run a new experiment.

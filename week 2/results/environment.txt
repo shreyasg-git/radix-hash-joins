@@ -1,0 +1,8 @@
+compiler=GCC 11.4.0
+binary_bits=64
+record_bytes=8
+logical_cpu=0
+timer=CLOCK_MONOTONIC
+seed=42
+warmup_runs=1
+repeats=7
