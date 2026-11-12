@@ -1,0 +1,15 @@
+Correctness verification
+107 small cases passed against the independent nested-loop reference.
+Every matching row pair was compared after sorting, including duplicate keys.
+The same 107 cases passed with AddressSanitizer and UndefinedBehaviorSanitizer.
+A sanitizer benchmark run at 10,000 and 100,000 rows also passed.
+Compilation passed -Wall -Wextra -Werror with GCC 11.4.0 in Ubuntu WSL.
+
+Recorded benchmark verification
+35 timed runs across 5 input sizes, with 7 runs at each size.
+The C program checked the match count and expected row-pair checksum every run.
+The Python analysis checked positive times, unique run IDs, count consistency,
+and build plus probe time against total time.
+
+Inputs use unique keys and a 50 percent match rate for the saved even-sized tables.
+The benchmark counts matches and checksums row pairs; output allocation is excluded.

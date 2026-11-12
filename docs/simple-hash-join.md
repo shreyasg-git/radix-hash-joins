@@ -17,42 +17,42 @@ At the largest size, the median total was 225.787 ms. Probing accounted for
 about 74.5% of the mean total time. That gives us a useful part of the join
 to compare after adding radix partitioning.
 
-- `results/report.pdf` explains the experiment, graphs and observations.
-- `results/timings.csv` contains the individual measurements.
-- `results/environment.txt` records the compiler and run settings.
-- `results/system.txt` records the system and CPU information exposed to Ubuntu.
+- `reports/simple-hash-join.pdf` explains the experiment, graphs and observations.
+- `results/simple-hash-join/timings.csv` contains the individual measurements.
+- `results/simple-hash-join/environment.txt` records the compiler and run settings.
+- `results/simple-hash-join/system.txt` records the system and CPU information exposed to Ubuntu.
 
 ## Draw plots from the saved measurements
 
-Open an Ubuntu or WSL terminal in this folder. With Python and Matplotlib
-installed, run:
+Open an Ubuntu or WSL terminal in the repository folder. With Python and
+Matplotlib installed, run:
 
 ```bash
-python3 analyze.py results
+python3 analysis/analyze_hash_join.py results/simple-hash-join
 ```
 
 This creates `join_times.png`, `phase_times.png`, `summary.csv` and
-`week2_results.md` inside `results`. It does not rerun the benchmark.
+`week2_results.md` inside `results/simple-hash-join`. It does not rerun the benchmark.
 
 ## Run the benchmark again
 
-From this folder in Ubuntu, with GCC installed:
+From the repository folder in Ubuntu, with GCC installed:
 
 ```bash
-gcc -O2 -std=c11 -Wall -Wextra hash_join.c -o hash_join
+gcc -O2 -std=c11 -Wall -Wextra src/hash_join.c -o hash_join
 ./hash_join --test
-./hash_join results-new
-uname -sr > results-new/system.txt
-lscpu >> results-new/system.txt
-python3 analyze.py results-new
+./hash_join results/simple-hash-join-new
+uname -sr > results/simple-hash-join-new/system.txt
+lscpu >> results/simple-hash-join-new/system.txt
+python3 analysis/analyze_hash_join.py results/simple-hash-join-new
 ```
 
 Use a fresh output folder name each time. For a quick check with three
 recorded runs at 10,000 and 100,000 rows per input, use:
 
 ```bash
-./hash_join results-quick 3 100000
-python3 analyze.py results-quick
+./hash_join results/simple-hash-join-quick 3 100000
+python3 analysis/analyze_hash_join.py results/simple-hash-join-quick
 ```
 
 ## Implementation and timing
