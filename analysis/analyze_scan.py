@@ -13,7 +13,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 ROOT=Path(__file__).resolve().parent
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('results_directory', nargs='?', type=Path, default=ROOT/'results')
+parser.add_argument('results_directory', nargs='?', type=Path, default=ROOT.parent/'results'/'stride-scan')
 parser.add_argument('--plots-only', action='store_true', help='Skip the Windows PDF report')
 args = parser.parse_args()
 OUT = args.results_directory.resolve()

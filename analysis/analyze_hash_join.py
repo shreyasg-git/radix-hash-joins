@@ -1,6 +1,6 @@
 """Summarize timings and draw the Week 2 baseline plots.
 
-Usage: python3 analyze.py results
+Usage: python3 analysis/analyze_hash_join.py results/simple-hash-join
 Requires matplotlib. Reads timings.csv and environment.txt in the supplied folder.
 """
 
