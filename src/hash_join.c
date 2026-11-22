@@ -28,7 +28,7 @@ typedef struct {
     size_t bucket_count;
 } HashTable;
 
-typedef struct {
+typedef struct { //holds the summary values returned by the probe()
     uint64_t matches;
     uint64_t checksum;
 } JoinResult;
@@ -46,7 +46,7 @@ static void *allocate(size_t count, size_t size) {
     return memory;
 }
 
-static uint64_t mix(uint64_t value) {
+static uint64_t mix(uint64_t value) { //Hash Function   SplitMix64 mixing function
     value ^= value >> 30;
     value *= UINT64_C(0xbf58476d1ce4e5b9);
     value ^= value >> 27;
@@ -65,7 +65,9 @@ static uint64_t now_ns(void) {
 
 static HashTable build(const Record *records, size_t count) {
     size_t bucket_count = 1;
-    while (bucket_count < count * 2) bucket_count *= 2;
+    /* Round ceil(count / 4) up to a power of two; keep one bucket if empty. */
+    size_t minimum_buckets = count / 4 + (count % 4 != 0);
+    while (bucket_count < minimum_buckets) bucket_count *= 2;
     HashTable table = {records, allocate(bucket_count, sizeof(size_t)),
                        allocate(count, sizeof(size_t)), bucket_count};
     for (size_t i = 0; i < bucket_count; ++i) table.buckets[i] = SIZE_MAX;
