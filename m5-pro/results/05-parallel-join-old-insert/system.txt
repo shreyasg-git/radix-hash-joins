@@ -1,0 +1,5 @@
+machdep.cpu.brand_string: Apple M5
+hw.ncpu: 10
+hw.perflevel0.physicalcpu: 4
+hw.pagesize: 16384
+hw.cachelinesize: 128

@@ -1,0 +1,66 @@
+make: Nothing to be done for `all'.
+./bin/hash_join --test
+Passed 107 cases against the nested-loop reference, comparing every matching row pair.
+./bin/hash_join_quarter --test
+Passed 107 cases against the nested-loop reference, comparing every matching row pair.
+./bin/radix_partition --test
+Passed 238 partitioning cases (sizes 0 to 100003, 0 to 12 bits, 1 to 3 passes).
+./bin/radix_join --test
+Passed 4558 join checks against the nested-loop reference (simple join, and radix join with 1 to 8 bits in 1 to 3 passes, both timing modes).
+./bin/parallel_join --test
+Passed 5524 parallel join checks against the nested-loop reference (1 to 4 threads, simple join with both insert methods, radix join with 1 to 8 bits in 1 to 3 passes).
+./bin/bucket_sweep --test
+Passed 5751 checks: both bucket rules, 3 key patterns, 5 hash functions, simple and radix join against the nested-loop reference.
+== 01-stride-scan: already done, skipped
+== 02-simple-hash-join: already done, skipped
+== 02-simple-hash-join-quarter-buckets: already done, skipped
+== 03-radix-partition: already done, skipped
+== 04-radix-join  (started 01:56:18)
+100000 rows per input: every run verified (50000 matches)
+1000000 rows per input: every run verified (500000 matches)
+2000000 rows per input: every run verified (1000000 matches)
+4000000 rows per input: every run verified (2000000 matches)
+8000000 rows per input: every run verified (4000000 matches)
+16000000 rows per input: every run verified (8000000 matches)
+32000000 rows per input: every run verified (16000000 matches)
+== 04-radix-join finished in 422 s
+== 04-radix-join-seed7  (started 02:03:20)
+1000000 rows per input: every run verified (500000 matches)
+8000000 rows per input: every run verified (4000000 matches)
+32000000 rows per input: every run verified (16000000 matches)
+== 04-radix-join-seed7 finished in 47 s
+== 04-radix-join-seed2026  (started 02:04:07)
+1000000 rows per input: every run verified (500000 matches)
+8000000 rows per input: every run verified (4000000 matches)
+32000000 rows per input: every run verified (16000000 matches)
+== 04-radix-join-seed2026 finished in 46 s
+== Threads experiment uses 12 radix bits in 1 pass(es), fastest at 16000000 rows in experiment 4
+== 05-parallel-join  (started 02:04:53)
+verified warmup 0 of 15
+recorded run 1 of 15
+recorded run 2 of 15
+recorded run 3 of 15
+recorded run 4 of 15
+recorded run 5 of 15
+recorded run 6 of 15
+recorded run 7 of 15
+recorded run 8 of 15
+recorded run 9 of 15
+recorded run 10 of 15
+recorded run 11 of 15
+recorded run 12 of 15
+recorded run 13 of 15
+recorded run 14 of 15
+recorded run 15 of 15
+== 05-parallel-join finished in 26 s
+== 06-bucket-sweep  (started 02:05:19)
+65536 rows per input: 16 settings, every run verified (32768 matches)
+524288 rows per input: 16 settings, every run verified (262144 matches)
+4194304 rows per input: 16 settings, every run verified (2097152 matches)
+16777216 rows per input: 16 settings, every run verified (8388608 matches)
+== 06-bucket-sweep finished in 155 s
+== 06-hash-functions  (started 02:07:54)
+1048576 rows per input: 60 settings, every run verified (524288 matches)
+== 06-hash-functions finished in 66 s
+== All experiments done: results
+exit=0

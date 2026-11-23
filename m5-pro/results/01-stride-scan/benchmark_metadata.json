@@ -1,0 +1,19 @@
+{
+  "platform": "macOS",
+  "cpu": "Apple M5",
+  "timer": "CLOCK_UPTIME_RAW",
+  "reads_per_scan": 200000,
+  "buffer_bytes": 268435456,
+  "repetitions": 30,
+  "warmup_rounds": 3,
+  "line_bytes_sysctl": 128,
+  "logical_cpu": -1,
+  "thread_placement": "highest QoS class (performance cores); macOS cannot pin threads",
+  "flush_method": "read every cache line of a separate 512 MiB buffer",
+  "eviction_check_cached_ns_per_read": 2.60,
+  "eviction_check_after_dc_civac_ns_per_read": 2.62,
+  "eviction_check_after_eviction_ns_per_read": 34.30,
+  "binary_bits": 64,
+  "compiler": "Apple LLVM 21.0.0 (clang-2100.1.1.101)",
+  "shuffle_seed": 20261105
+}
