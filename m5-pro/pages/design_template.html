@@ -1,0 +1,337 @@
+<title>How We Test Joins</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one reading column (~68ch); each experiment is a full-width panel holding its design table, chart and result. */
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --surface-2: #eceff3; --line: #d9dee5;
+  --fg: #131820; --fg-2: #47505d; --muted: #6a7280;
+  --accent: #2a78d6;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111317; --surface: #191c21; --surface-2: #23272e; --line: #30353d;
+    --fg: #eef0f3; --fg-2: #b8bfc9; --muted: #8b939e;
+    --accent: #3987e5; --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111317; --surface: #191c21; --surface-2: #23272e; --line: #30353d;
+  --fg: #eef0f3; --fg-2: #b8bfc9; --muted: #8b939e;
+  --accent: #3987e5; --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 28px; }
+.col { max-width: 68ch; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 2.9rem); font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 1.55rem; font-weight: 600; letter-spacing: -0.01em; }
+h3 { font-size: 1.05rem; font-weight: 600; }
+p { margin: 0; }
+.stack { display: grid; gap: 14px; }
+.eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 1.15rem; color: var(--fg-2); }
+code { font-family: var(--mono); font-size: 0.9em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.simple { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; display: grid; gap: 6px; }
+.simple p { font-size: 1.05rem; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: grid; gap: 18px; min-width: 0; }
+.design { display: grid; grid-template-columns: 11rem 1fr; gap: 0; border-top: 1px solid var(--line); }
+.design > div { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--line); font-size: 0.95rem; }
+.design > div:nth-child(odd) { font-size: 0.8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding-top: 11px; }
+@media (max-width: 560px) { .design { grid-template-columns: 1fr; } .design > div:nth-child(odd) { border-bottom: 0; padding-bottom: 0; } }
+.result { background: var(--surface-2); border-radius: 8px; padding: 14px 16px; display: grid; gap: 8px; }
+.result .k { font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.chart { width: 100%; overflow-x: auto; }
+.chart svg { display: block; width: 100%; height: auto; min-width: 520px; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.82rem; color: var(--fg-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 0; border-top: 2px solid; display: inline-block; }
+.sw.dash { border-top-style: dashed; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; }
+.note { font-size: 0.85rem; color: var(--muted); }
+ul.clean, ol.clean { margin: 0; padding-left: 1.2rem; display: grid; gap: 8px; }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; }
+.rule { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; background: var(--surface); display: grid; gap: 6px; align-content: start; }
+.rule p { font-size: 0.93rem; color: var(--fg-2); }
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; counter-reset: step; }
+.flow div { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: var(--surface-2); font-size: 0.9rem; display: grid; gap: 4px; }
+.flow div b { font-size: 0.95rem; }
+.flow div::before { counter-increment: step; content: "Step " counter(step); font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+#tip { position: fixed; pointer-events: none; background: var(--fg); color: var(--bg); font-size: 0.8rem; padding: 7px 10px; border-radius: 6px; font-family: var(--mono); z-index: 20; line-height: 1.45; }
+a { color: var(--accent); }
+</style>
+
+<div class="wrap">
+  <header class="stack col">
+    <div class="eyebrow">Radix hash join project · Apple M5 MacBook Pro · 22 November</div>
+    <h1>How We Test Joins</h1>
+    <p class="lede">What each of our six experiments asks, how it is set up, what it measured on the M5, and how we turn timings into a conclusion.</p>
+  </header>
+
+  <section class="simple col" aria-label="Short version">
+    <p><b>Short version.</b> Each experiment asks one question.</p>
+    <p>We change one setting at a time and keep everything else the same. We repeat every setting many times, check every answer, and compare the middle value of the runs.</p>
+    <p>All six experiments ran on one laptop, an Apple M5 MacBook Pro, so their times can be compared with each other.</p>
+  </section>
+
+  <section class="stack col">
+    <h2>The question behind all six</h2>
+    <p>A join matches rows of one table with rows of another that share a key, for example orders with customers. Our joins use a hash table: a row of numbered boxes where each row is filed by its key, so a match can be found by opening one box instead of searching everything.</p>
+    <p>In 1999 Boncz, Manegold and Kersten argued that on modern computers the slow part of a join is not the arithmetic but waiting for memory. A processor keeps small, fast copies of recently used memory, called caches. On the M5, a random read took {{EVICT_CACHED}} nanoseconds when the data was in a cache and {{EVICT_AFTER}} nanoseconds when it had to come from main memory (measured at the start of experiment 1). Their fix, the radix hash join, first cuts both tables into small pieces that fit in the cache, then joins piece by piece.</p>
+    <p>Experiments 1 to 5 test that argument step by step, on today's hardware. Experiment 6 tests a choice inside every hash table that we had never tested: how many boxes it has, and how evenly the hash spreads keys over them.</p>
+  </section>
+
+  <section class="stack" aria-label="Shared rules">
+    <div class="col stack"><h2>Rules every experiment follows</h2>
+    <p>These rules are what make one timing comparable with another.</p></div>
+    <div class="rules">
+      <div class="rule"><h3>Check every answer</h3><p>Every timed run checks its result: the number of matches and a checksum of the matched row numbers must equal the expected values. Each join and partitioning program also has a test mode that checks 107 to 5,751 small cases against a slow but obviously correct method.</p></div>
+      <div class="rule"><h3>Throw away the first run</h3><p>The first run of a setting fills caches and wakes up the processor. It is checked but not recorded.</p></div>
+      <div class="rule"><h3>Shuffle the order every round</h3><p>Each round runs every setting once, in a new random order. If the laptop is slow for a moment, that slowness lands on different settings each round instead of always on the same one.</p></div>
+      <div class="rule"><h3>Report the middle value</h3><p>We report the median: half of the runs were faster, half slower. One run slowed by a background program moves the average a lot but the median hardly at all.</p></div>
+      <div class="rule"><h3>Prepare memory before the clock starts</h3><p>From experiment 3 on, all memory is requested and written once before timing. Otherwise the first touch of each memory page, which the operating system handles, would be counted as join time.</p></div>
+      <div class="rule"><h3>Same data every time</h3><p>Inputs come from a fixed random seed (42), so every run of every experiment sees exactly the same rows in the same order. Experiment 4 repeats with two other seeds to check that one particular order is not special.</p></div>
+    </div>
+  </section>
+
+  <!-- ===================== Experiment 1 ===================== -->
+  <section class="panel" aria-label="Experiment 1">
+    <div class="stack"><div class="eyebrow">Experiment 1 · stride scan</div>
+      <h2>Does the gap between reads change the time?</h2></div>
+    <div class="design">
+      <div>Why</div><div>The cheapest way to see memory cost on its own. Every scan does the same work, reading 200,000 single bytes and adding them up. Only where the bytes sit changes.</div>
+      <div>What changes</div><div>The stride, meaning the gap between two reads: 1, 2, 4, … 1,024 bytes (11 values). And whether the cache was emptied first, or the same bytes were just read.</div>
+      <div>What stays fixed</div><div>200,000 reads per scan, one 256 MiB array, one thread.</div>
+      <div>Repeats</div><div>{{SCAN_WARM}} warm-up rounds, then {{SCAN_REPS}} recorded runs of every stride and method, in a new order each round.</div>
+      <div>Mac change</div><div>The Ryzen version emptied the cache with a special instruction. Its Apple counterpart did nothing measurable: random reads took {{EVICT_CACHED}} ns before it and {{EVICT_CIVAC}} ns after. So the Mac version reads a separate 512 MiB array first, after which reads took {{EVICT_AFTER}} ns.</div>
+      <div>How we conclude</div><div>Compare the median time per read across strides. A flat line would mean memory layout does not matter.</div>
+    </div>
+    <div class="stack">
+      <div class="legend" id="lg-scan"></div>
+      <div class="chart" id="ch-scan"></div>
+    </div>
+    <div class="result"><span class="k">Result on the M5</span>
+      <p>After emptying the cache, stride 256 took {{SCAN_RATIO}} times as long as stride 1 for the same number of reads ({{S1_256}} against {{S1_1}} ns per read). At stride 1, one 128-byte cache line serves 128 reads; from stride 128 on, every read needs its own line from memory.</p></div>
+  </section>
+
+  <!-- ===================== Experiment 2 ===================== -->
+  <section class="panel" aria-label="Experiment 2">
+    <div class="stack"><div class="eyebrow">Experiment 2 · simple hash join</div>
+      <h2>How does a plain hash join slow down as tables grow?</h2></div>
+    <div class="design">
+      <div>Why</div><div>This is the baseline every later experiment compares against.</div>
+      <div>How it works</div><div>Build: file every row of the left table into the hash table. Probe: for every row of the right table, open its box and compare keys with every row in that box.</div>
+      <div>What changes</div><div>Rows per table: {{W2_SIZES}}. And, new tonight, the number of boxes: the Week 2 rule (2 boxes per row) against Varun's rule (1 box per 4 rows).</div>
+      <div>What stays fixed</div><div>Left keys 0 to N−1, right keys 0, 2, 4, … so half of the probes find a match. Both tables shuffled. Hash function <code>mix</code>.</div>
+      <div>Repeats</div><div>1 warm-up, then {{W2_REPS}} recorded runs per size.</div>
+      <div>How we conclude</div><div>Divide time by rows. If a join only did more work as tables grew, time per row would stay flat. If it rises, each row got more expensive, which points to memory.</div>
+    </div>
+    <div class="result"><span class="k">Result on the M5</span>
+      <p>Time per row grew from {{W2_SMALL}} ns at {{W2_SMALL_N}} rows to {{W2_LARGE}} ns at {{W2_LARGE_N}} rows, for the same work per row. Varun's rule was {{RULE_LO}} to {{RULE_HI}} times slower at every size ({{Q4_TOTAL}} against {{W2_TOTAL}} ms at {{W2_LARGE_N}} rows). Why, and what is still untested, is on the <a href="https://claude.ai/artifact/7uvb4pBjwgHkgY16CNVLsE">Hash Bucket Lab</a> page.</p></div>
+  </section>
+
+  <!-- ===================== Experiment 3 ===================== -->
+  <section class="panel" aria-label="Experiment 3">
+    <div class="stack"><div class="eyebrow">Experiment 3 · radix partitioning</div>
+      <h2>How many pieces can one pass cut a table into before it slows down?</h2></div>
+    <div class="flow" aria-label="One partitioning pass">
+      <div><b>Count</b>Read every row, take the lowest B bits of its hash, and count how many rows go to each of the 2<sup>B</sup> pieces.</div>
+      <div><b>Plan</b>Add the counts up, so each piece knows where it starts in the output.</div>
+      <div><b>Copy</b>Read every row again and copy it to the next free slot of its piece.</div>
+    </div>
+    <div class="design">
+      <div>Why</div><div>The copy step writes to 2<sup>B</sup> places at once. The paper says too many places overwhelm the cache and the address-translation cache (the TLB), so it splits the bits over several passes, for example 12 bits as 6 + 6.</div>
+      <div>What changes</div><div>Bits B from 0 to {{P_MAXB}} (1 to about 1 million pieces), in 1, 2 or 3 passes.</div>
+      <div>What stays fixed</div><div>16,777,216 rows of 8 bytes (128 MiB), the same hash as experiment 2, one thread.</div>
+      <div>Repeats</div><div>1 checked warm-up, then 15 recorded runs of every setting, in a new order each round. Typical spread between runs: {{P_CV}}% of the average.</div>
+      <div>How we conclude</div><div>Cost per row against B. The "flat level" is the median of 2 to 8 bits. A slow-down counts only if it lasts: every larger B must also stay more than 30% above the flat level.</div>
+    </div>
+    <div class="stack">
+      <div class="legend" id="lg-part"></div>
+      <div class="chart" id="ch-part"></div>
+    </div>
+    <div class="result"><span class="k">Result on the M5</span>
+      <p>One pass costs about {{P_FLAT}} ns per row from 2 to {{P_KNEE_M1}} bits, close to a plain copy ({{P_ZERO}} ns at 0 bits). From {{P_KNEE}} bits ({{P_KNEE_N}} pieces) it stays slower, reaching {{P_TOP}} ns at {{P_MAXB}} bits. Two passes only win from {{P_CROSS}} bits ({{P_CROSS_N}} pieces). On 1999 hardware, whose address-translation cache held 64 entries, the paper's limit was about 6 bits (64 pieces).</p></div>
+  </section>
+
+  <!-- ===================== Experiment 4 ===================== -->
+  <section class="panel" aria-label="Experiment 4">
+    <div class="stack"><div class="eyebrow">Experiment 4 · simple against radix hash join</div>
+      <h2>Does cutting the tables into pieces first make the join faster?</h2></div>
+    <div class="flow" aria-label="Radix hash join">
+      <div><b>Cut the left table</b>One or two partitioning passes, as in experiment 3.</div>
+      <div><b>Cut the right table</b>Same bits, so matching keys always land in pieces with the same number.</div>
+      <div><b>Join piece by piece</b>For piece p: build a small hash table from the left piece, then probe it with the right piece. Each small table fits in the cache.</div>
+    </div>
+    <div class="design">
+      <div>Why</div><div>Cutting costs an extra read and write of both tables. The question is whether faster lookups in small tables pay for that.</div>
+      <div>What changes</div><div>Rows per table: {{J_SIZES}}. Radix bits 2 to 18 (skipped when pieces would hold fewer than 4 rows), in 1 or 2 passes. Plus the simple join at every size.</div>
+      <div>What stays fixed</div><div>Both joins share the same hash table code and the same inputs as experiment 2. Inside a piece, boxes are chosen from the hash bits above the B bits used for cutting (all rows in a piece share their lowest B bits).</div>
+      <div>Repeats</div><div>1 checked warm-up, then 15 recorded runs of every setting, in a new order each round. Then the same at 3 sizes with 2 other data seeds, 7 runs each.</div>
+      <div>Timing</div><div>The piece-by-piece join is timed as one block with no clock reads inside it. The split into build and probe time comes from a separate build-only pass after each run. (v2 read the clock twice per piece inside the timing; fixed tonight, see below.)</div>
+      <div>How we conclude</div><div>For each size, find the fastest radix setting. "Clearly faster" means its slowest run beat the simple join's fastest run. Settings whose runs overlap with the best one count as ties. Speed-up ranges come from resampling the recorded runs 4,000 times (a bootstrap): the middle 95% of the resampled ratios.</div>
+    </div>
+    <div class="stack">
+      <div class="legend" id="lg-join"></div>
+      <div class="chart" id="ch-join"></div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th class="num">Rows per table</th><th class="num">Simple (ms)</th><th class="num">Best radix (ms)</th><th class="num">Best setting</th><th class="num">Speed-up</th><th>Every radix run faster?</th></tr></thead>
+      <tbody>{{J_ROWS}}</tbody></table></div>
+    <div class="result"><span class="k">Result on the M5</span>
+      <p>At {{J_BIG}} rows the radix join took {{J_BIG_R}} ms and the simple join {{J_BIG_S}} ms: {{J_BIG_X}} times as fast, using {{J_BIG_B}} bits in one pass. From {{J_FIRST_SEP}} rows up, every recorded radix run beat every recorded simple run. At {{J_SMALL}} rows, where everything fits in the cache anyway, the ratio was {{J_SMALL_X}}. The simple join's cost per row grew from {{J_S_FIRST}} ns at {{J_SMALL}} rows to {{J_S_LAST}} ns at {{J_BIG}} rows (highest: {{J_S_HI}} ns at {{J_S_HI_N}} rows); the radix join stayed between {{J_R_LO}} and {{J_R_HI}} ns. A simple cost model picked a setting within run-to-run noise of the fastest at {{MODEL_GOOD}} of {{MODEL_N}} sizes; its worst pick was {{MODEL_WORST}}% slower. The model was fitted to these same runs, so this shows it describes the data well, not that it can predict a new machine.</p></div>
+    <div class="stack"><h3>Other data seeds</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Seed</th><th class="num">Rows per table</th><th class="num">Simple (ms)</th><th class="num">Best radix (ms)</th><th class="num">Best bits</th><th class="num">Speed-up</th></tr></thead>
+        <tbody>{{SEED_ROWS}}</tbody></table></div>
+      <p class="note">Seed 42 is the main run. With other shuffles of the same rows the speed-up stayed between {{SEED_LO}}× and {{SEED_HI}}× at these sizes.</p></div>
+  </section>
+
+  <!-- ===================== Experiment 5 ===================== -->
+  <section class="panel" aria-label="Experiment 5">
+    <div class="stack"><div class="eyebrow">Experiment 5 · threads</div>
+      <h2>Do the joins get faster with more processor cores?</h2></div>
+    <div class="design">
+      <div>Why</div><div>The assignment's extension: run each phase with 1, 2 and 4 threads (independent workers) and report time per phase and speed-up.</div>
+      <div>How work is shared</div><div><b>Simple join:</b> every thread files its share of the left rows into one shared table, using one all-or-nothing swap on the box so no row is lost; then every thread probes with its share of the right rows. <b>Radix join:</b> every thread counts its share of rows, the counts are combined so each thread knows exactly where to write, then all copy at once with no locks. Pieces are then handed out 16 at a time to whichever thread is free.</div>
+      <div>What changes</div><div>Threads: {{T_LIST}}. The M5 has 4 fast (performance) cores and 6 slower (efficiency) cores; 8 shows what happens once threads spill onto the slower ones.</div>
+      <div>What stays fixed</div><div>{{T_ROWS_N}} rows per table. Radix setting {{T_BITS}} bits in {{T_PASSES}} pass, picked automatically: the fastest setting at this size in experiment 4.</div>
+      <div>Repeats</div><div>1 checked warm-up, then 15 recorded runs of every thread count and join, in a new order each round.</div>
+      <div>How we conclude</div><div>Every phase ends with all threads waiting for each other, so a phase's time is the time of its slowest thread. Speed-up = time with 1 thread ÷ time with N threads. Perfect sharing would give N.</div>
+    </div>
+    <div class="stack">
+      <div class="legend" id="lg-threads"></div>
+      <div class="chart" id="ch-threads"></div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th class="num">Threads</th><th class="num">Simple (ms)</th><th class="num">Speed-up</th><th class="num">Radix (ms)</th><th class="num">Speed-up</th><th class="num">Radix ahead by</th></tr></thead>
+      <tbody>{{T_ROWS}}</tbody></table></div>
+    <div class="result"><span class="k">Result on the M5</span>
+      <p>With 4 threads, one per fast core, the radix join ran {{T_R4}} times as fast as with one thread and the simple join {{T_S4}} times. {{T_COMPARE}} With 4 threads the radix join's cutting phase sped up {{T_PART4}} times and its probe phase {{T_PROBE4}} times. With {{T_MAX}} threads: radix {{T_R8}}×, simple {{T_S8}}×.</p><p>Fixed tonight: in v2 every insert of the simple join waited until all earlier memory writes had finished, even with one thread. Its 1-thread build took {{OLD_E5_SBUILD}} ms, which made its speed-up look {{OLD_T_S4}}× at 4 threads. Each insert is now one swap with no waiting; the 1-thread build takes {{E5_SBUILD}} ms. The plain build of experiment 4, with no atomic operations at all, took {{E4_SBUILD_LO}} to {{E4_SBUILD_HI}} ms over its runs (middle value {{E4_SBUILD}} ms), so the safe insert now costs nothing extra.</p></div>
+  </section>
+
+  <!-- ===================== Experiment 6 ===================== -->
+  <section class="panel" aria-label="Experiment 6">
+    <div class="stack"><div class="eyebrow">Experiment 6 · boxes and hash functions</div>
+      <h2>How many boxes should the hash table have, and does the hash spread keys evenly?</h2></div>
+    <div class="design">
+      <div>Why</div><div>The professor's question. Week 2 used 2 boxes per row (0.5 rows per box) and Varun's commit changed it to 1 box per 4 rows (4 rows per box). Neither was tested, and nobody checked how evenly the hash spreads our keys.</div>
+      <div>What changes</div><div>Rows per box: {{B_LOADS}}. Rows per table: {{B_SIZES}}. Both joins; the radix join uses the same rule inside every piece. A second run at {{H_N}} rows tries 5 hash functions on 3 key patterns.</div>
+      <div>What stays fixed</div><div>The table design (a chain per box), box counts that are powers of two, the timing rules of experiment 4 after its fix, and one thread.</div>
+      <div>Repeats</div><div>1 checked warm-up, then {{B_REPS}} recorded runs of every setting, in a new order each round.</div>
+      <div>How we conclude</div><div>For each size and join, the fastest rows-per-box value wins; values whose runs overlap with it are ties. The rule to keep is the fewest boxes that tie with the fastest at every size, because fewer boxes use less memory. How evenly keys spread is measured on the real tables and compared with what a perfectly random hash would give.</div>
+    </div>
+    <div class="stack">
+      <div class="legend" id="lg-buckets"></div>
+      <div class="chart" id="ch-buckets"></div>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th class="num">Rows per table</th><th>Join</th><th class="num">Fastest rows per box</th><th class="num">Week 2 rule</th><th class="num">Varun's rule</th></tr></thead>
+      <tbody>{{B_ROWS}}</tbody></table></div>
+    <div class="result"><span class="k">Result on the M5</span>
+      <p>{{B_RESULT}}</p><p>Our hash, mix, left a share of empty boxes within {{MIX_DEV}} percentage points of what a perfectly random hash gives, at every size and setting. So mix spreads our keys evenly; the long chains at 4 rows per box are just what chance gives.</p></div>
+    <div class="stack"><h3>Hash functions and key patterns ({{H_N}} rows, 0.5 rows per box)</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Keys</th><th>Hash</th><th class="num">Empty boxes</th><th class="num">Longest chain</th><th class="num">Rows checked per lookup</th><th class="num">Simple (ms)</th><th class="num">Radix (ms)</th></tr></thead>
+        <tbody>{{H_ROWS}}</tbody></table></div>
+      <p class="note">{{H_NOTE}}</p></div>
+  </section>
+
+  <section class="stack col">
+    <h2>Fixed tonight</h2>
+    <ul class="clean">
+      <li><b>Clock reads inside the radix join's timing.</b> v2 read the clock twice per piece inside the timed join, about {{CLOCK_NS}} ns per read. With many small pieces that was a real share of the run: at 14 bits and 100,000 rows the old way measured {{CLK_OLD}} ms and the clean way {{CLK_NEW}} ms. Now the join is timed as one block.</li>
+      <li><b>Slow one-thread build in experiment 5.</b> See experiment 5 above: {{OLD_E5_SBUILD}} ms before, {{E5_SBUILD}} ms after.</li>
+      <li><b>Box count never tested.</b> Experiment 6 now tests it.</li>
+    </ul>
+    <p class="note">Both old ways can still be run for comparison (<code>--timing per-partition</code>, <code>--insert cas-release</code>). DESIGN-FLAWS.md in the m5-pro folder explains both.</p>
+  </section>
+
+  <section class="stack col">
+    <h2>Weak spots we know about</h2>
+    <ul class="clean">
+      <li><b>No cache-miss counts.</b> macOS does not let a program read the processor's built-in miss counters, so every cache explanation here is inferred from timings and data sizes.</li>
+      <li><b>No core pinning.</b> macOS decides which core runs each thread. We ask for the highest priority class, which macOS keeps on the fast cores.</li>
+      <li><b>Unique keys only.</b> Every key appears once. Experiment 6 adds two other key patterns, but repeated keys or uneven data would make some pieces and chains much longer.</li>
+      <li><b>One table design.</b> Every join uses chained boxes with power-of-two counts. Other designs (open addressing, boxes that hold several keys) would have other best settings.</li>
+      <li><b>Matches are counted, not written out.</b> A real join writes every matched pair, which adds the same cost to both joins.</li>
+    </ul>
+  </section>
+  <div id="tip" hidden></div>
+</div>
+
+<script>
+const CHARTS = {{CHARTS}};
+const tip = document.getElementById("tip");
+const nf = (v) => v >= 1e6 ? (v / 1e6).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "M" : v >= 1e3 ? (v / 1e3).toLocaleString("en-US", { maximumFractionDigits: 0 }) + "K" : v.toLocaleString("en-US");
+const yf = (v) => v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2);
+
+function draw(id, c) {
+  const W = 760, H = 300, L = 58, Rr = 190, T = 14, B = 46;
+  const allX = [...new Set(c.series.flatMap((s) => s.pts.map((p) => p[0])))].sort((a, b) => a - b);
+  const ys = c.series.flatMap((s) => s.pts.map((p) => p[1])).concat(c.ref ? c.ref.map((p) => p[1]) : []);
+  const ymax0 = Math.max(...ys) * 1.08;
+  const step = (() => { const e = Math.pow(10, Math.floor(Math.log10(ymax0 / 4))); const m = ymax0 / 4 / e; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * e; })();
+  const ymax = Math.ceil(ymax0 / step) * step;
+  const xv = (x) => c.xLog ? Math.log2(x) : x;
+  const x0 = xv(allX[0]), x1 = xv(allX[allX.length - 1]);
+  const X = (x) => L + (W - L - Rr) * (xv(x) - x0) / (x1 - x0 || 1);
+  const Y = (y) => T + (H - T - B) * (1 - y / ymax);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${c.yLabel} by ${c.xLabel}">`;
+  for (let v = 0; v <= ymax + 1e-9; v += step) {
+    s += `<line x1="${L}" x2="${W - Rr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1"/>`;
+    s += `<text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--mono)">${v.toFixed(step >= 1 ? 0 : step >= 0.1 ? 1 : 2)}</text>`;
+  }
+  const tl = (t) => c.xTickLabels ? c.xTickLabels[c.xTicks.indexOf(t)] : nf(t);
+  for (const t of c.xTicks) s += `<text x="${X(t)}" y="${H - B + 18}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="var(--mono)">${tl(t)}</text>`;
+  s += `<text x="${(L + W - Rr) / 2}" y="${H - 6}" text-anchor="middle" font-size="12" fill="var(--muted)">${c.xLabel}</text>`;
+  s += `<text x="14" y="${T + (H - T - B) / 2}" text-anchor="middle" font-size="12" fill="var(--muted)" transform="rotate(-90 14 ${T + (H - T - B) / 2})">${c.yLabel}</text>`;
+  s += `<line x1="${L}" x2="${W - Rr}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--muted)" stroke-width="1"/>`;
+  if (c.ref) {
+    s += `<polyline points="${c.ref.map((p) => X(p[0]) + "," + Y(p[1])).join(" ")}" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+    const lp = c.ref[c.ref.length - 1];
+    s += `<text x="${X(lp[0]) + 10}" y="${Y(lp[1]) + 4}" font-size="11.5" fill="var(--muted)">${c.refName}</text>`;
+  }
+  const ends = [];
+  c.series.forEach((se) => {
+    s += `<polyline points="${se.pts.map((p) => X(p[0]) + "," + Y(p[1])).join(" ")}" fill="none" stroke="var(${se.c})" stroke-width="2" stroke-linejoin="round"/>`;
+    se.pts.forEach((p) => { s += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="4" fill="var(${se.c})" stroke="var(--surface)" stroke-width="2"/>`; });
+    const lp = se.pts[se.pts.length - 1];
+    ends.push({ y: Y(lp[1]), x: X(lp[0]), name: se.name, c: se.c });
+  });
+  ends.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 15) ends[i].y = ends[i - 1].y + 15;
+  ends.forEach((e) => { s += `<text x="${e.x + 10}" y="${e.y + 4}" font-size="11.5" fill="var(--fg-2)">${e.name}</text>`; });
+  s += `<line id="${id}-cross" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/>`;
+  s += `<rect x="${L - 10}" y="${T}" width="${W - L - Rr + 20}" height="${H - T - B}" fill="transparent" id="${id}-hit"/></svg>`;
+  const el = document.getElementById("ch-" + id);
+  el.innerHTML = s;
+  document.getElementById("lg-" + id).innerHTML = c.series.map((se) => `<span><i class="sw" style="border-color:var(${se.c})"></i>${se.name}</span>`).join("")
+    + (c.ref ? `<span><i class="sw dash" style="border-color:var(--muted)"></i>${c.refName}</span>` : "");
+  const svg = el.querySelector("svg"), cross = el.querySelector(`#${id}-cross`);
+  el.querySelector(`#${id}-hit`).addEventListener("mousemove", (ev) => {
+    const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    let best = allX[0];
+    for (const x of allX) if (Math.abs(X(x) - loc.x) < Math.abs(X(best) - loc.x)) best = x;
+    cross.setAttribute("x1", X(best)); cross.setAttribute("x2", X(best)); cross.setAttribute("visibility", "visible");
+    const lines = c.series.map((se) => { const p = se.pts.find((q) => q[0] === best); return p ? `${se.name}: ${yf(p[1])} ${c.unit}` : null; }).filter(Boolean);
+    tip.innerHTML = `<b>${c.xTickLabels && c.xTicks.includes(best) ? tl(best) : best.toLocaleString("en-US")}${c.xUnit}</b><br>` + lines.join("<br>");
+    tip.hidden = false; tip.style.left = (ev.clientX + 14) + "px"; tip.style.top = (ev.clientY - 20) + "px";
+  });
+  el.querySelector(`#${id}-hit`).addEventListener("mouseleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
+}
+for (const [id, c] of Object.entries(CHARTS)) draw(id, c);
+</script>
