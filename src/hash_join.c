@@ -108,6 +108,27 @@ static void release(HashTable *table) {
     free(table->next);
 }
 
+/* Only for understanding search work: run AFTER all timed trials at this size. */
+static void write_collision_stats(FILE *file, const HashTable *table,
+                                  size_t left_count, const Record *right, size_t right_count) {
+    size_t occupied = 0, longest = 0;
+    for (size_t b = 0; b < table->bucket_count; ++b) {
+        size_t length = 0;
+        for (size_t row = table->buckets[b]; row != SIZE_MAX; row = table->next[row]) ++length;
+        if (length) ++occupied;
+        if (length > longest) longest = length;
+    }
+    uint64_t comparisons = 0;
+    for (size_t i = 0; i < right_count; ++i) {
+        size_t b = mix(right[i].key) & (table->bucket_count - 1);
+        for (size_t row = table->buckets[b]; row != SIZE_MAX; row = table->next[row]) ++comparisons;
+    }
+    /* Every insertion beyond the first in an occupied bucket is a collision. */
+    fprintf(file, "%zu,%zu,%zu,%zu,%zu,%zu,%" PRIu64 "\n",
+            left_count, right_count, table->bucket_count, occupied,
+            left_count - occupied, longest, comparisons);
+}
+
 static size_t reference_join(const Record *left, size_t left_count,
                              const Record *right, size_t right_count, Pair *pairs) {
     size_t count = 0;
@@ -240,7 +261,7 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
     size_t repeats = argc > 2 ? parse_number(argv[2], 1, 100) : 7;
-    size_t max_rows = argc > 3 ? parse_number(argv[3], 10000, 5000000) : 2000000;
+    size_t max_rows = argc > 3 ? parse_number(argv[3], 256, 5000000) : 2000000;
     /* A fresh directory prevents accidental replacement of recorded results. */
     if (mkdir(argv[1], 0755)) {
         perror(argv[1]);
@@ -261,8 +282,19 @@ int main(int argc, char **argv) {
             "timer=CLOCK_MONOTONIC\nseed=42\nwarmup_runs=1\nrepeats=%zu\n",
             __VERSION__, 8 * sizeof(void *), sizeof(Record), cpu, repeats);
     fclose(environment);
+    if (snprintf(path, sizeof(path), "%s/collisions.csv", argv[1]) >= (int)sizeof(path)) {
+        fprintf(stderr, "Output path is too long\n");
+        return EXIT_FAILURE;
+    }
+    FILE *collisions = fopen(path, "w");
+    if (!collisions) { perror(path); return EXIT_FAILURE; }
+    fprintf(collisions, "rows_left,rows_right,buckets,occupied_buckets,collision_insertions,"
+            "max_chain_length,comparisons\n");
     fprintf(output, "rows_left,rows_right,run,seed,matches,checksum,buckets,estimated_bytes,build_ms,probe_ms,total_ms\n");
-    const size_t sizes[] = {10000, 100000, 500000, 1000000, 2000000, 5000000};
+    /* Added cases around this laptop's 32 KiB, 1 MiB, and 16 MiB build working sets. */
+    const size_t sizes[] = {256, 1024, 1400, 1792, 2048, 10000, 49152, 57344,
+                           65536, 100000, 500000, 786432, 917504, 1000000,
+                           1048576, 2000000, 5000000};
     for (size_t size_index = 0; size_index < sizeof(sizes) / sizeof(sizes[0]); ++size_index) {
         size_t count = sizes[size_index];
         if (count > max_rows) break;
@@ -289,11 +321,21 @@ int main(int argc, char **argv) {
             }
             release(&table);
         }
+        /* Separate inspection: keep diagnostic counting out of build/probe timing. */
+        HashTable inspected = build(left, count);
+        write_collision_stats(collisions, &inspected, count, right, count);
+        release(&inspected);
         free(left);
         free(right);
         if (fflush(output)) { perror("Writing timings"); return EXIT_FAILURE; }
         printf("%zu rows per input: verified %" PRIu64 " matches; %zu recorded runs\n", count, expected.matches, repeats);
     }
     if (fclose(output)) { perror("Closing timings"); return EXIT_FAILURE; }
+    if (fclose(collisions)) { perror("Closing collision statistics"); return EXIT_FAILURE; }
     return 0;
 }
+
+
+//relate the experiment with the inital experiment
+//for time graph the x axis needs to be the size  , there should be poitns of cache line size
+//instrument  the existing  code to find out to find the collisions in the hash table so that we can attempt to connect it with the initial stride experiment
