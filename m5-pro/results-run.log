@@ -1,0 +1,93 @@
+make: Nothing to be done for `all'.
+./bin/hash_join --test
+Passed 107 cases against the nested-loop reference, comparing every matching row pair.
+./bin/hash_join_quarter --test
+Passed 107 cases against the nested-loop reference, comparing every matching row pair.
+./bin/radix_partition --test
+Passed 238 partitioning cases (sizes 0 to 100003, 0 to 12 bits, 1 to 3 passes).
+./bin/radix_join --test
+Passed 2332 join checks against the nested-loop reference (simple join, and radix join with 1 to 8 bits in 1 to 3 passes).
+./bin/parallel_join --test
+Passed 5284 parallel join checks against the nested-loop reference (1 to 4 threads, simple join and radix join with 1 to 8 bits in 1 to 3 passes).
+== 01-stride-scan  (started 22:27:07)
+Eviction check (ns per random read): cached 2.60, after DC CIVAC 2.62, after eviction 34.30
+Completed 5/30 rounds
+Completed 10/30 rounds
+Completed 15/30 rounds
+Completed 20/30 rounds
+Completed 25/30 rounds
+Completed 30/30 rounds
+All checksums verified; output: results/01-stride-scan; cache line: 128 bytes
+== 01-stride-scan finished in 9 s
+== 02-simple-hash-join  (started 22:27:16)
+10000 rows per input: verified 5000 matches; 7 recorded runs
+100000 rows per input: verified 50000 matches; 7 recorded runs
+500000 rows per input: verified 250000 matches; 7 recorded runs
+1000000 rows per input: verified 500000 matches; 7 recorded runs
+2000000 rows per input: verified 1000000 matches; 7 recorded runs
+== 02-simple-hash-join finished in 0 s
+== 02-simple-hash-join-quarter-buckets  (started 22:27:16)
+10000 rows per input: verified 5000 matches; 7 recorded runs
+100000 rows per input: verified 50000 matches; 7 recorded runs
+500000 rows per input: verified 250000 matches; 7 recorded runs
+1000000 rows per input: verified 500000 matches; 7 recorded runs
+2000000 rows per input: verified 1000000 matches; 7 recorded runs
+== 02-simple-hash-join-quarter-buckets finished in 2 s
+== 03-radix-partition  (started 22:27:18)
+default pages: verified warmup 0 of 15
+default pages: recorded run 1 of 15
+default pages: recorded run 2 of 15
+default pages: recorded run 3 of 15
+default pages: recorded run 4 of 15
+default pages: recorded run 5 of 15
+default pages: recorded run 6 of 15
+default pages: recorded run 7 of 15
+default pages: recorded run 8 of 15
+default pages: recorded run 9 of 15
+default pages: recorded run 10 of 15
+default pages: recorded run 11 of 15
+default pages: recorded run 12 of 15
+default pages: recorded run 13 of 15
+default pages: recorded run 14 of 15
+default pages: recorded run 15 of 15
+== 03-radix-partition finished in 56 s
+== 04-radix-join  (started 22:28:14)
+100000 rows per input: every run verified (50000 matches)
+1000000 rows per input: every run verified (500000 matches)
+2000000 rows per input: every run verified (1000000 matches)
+4000000 rows per input: every run verified (2000000 matches)
+8000000 rows per input: every run verified (4000000 matches)
+16000000 rows per input: every run verified (8000000 matches)
+32000000 rows per input: every run verified (16000000 matches)
+== 04-radix-join finished in 414 s
+== 04-radix-join-seed7  (started 22:35:08)
+1000000 rows per input: every run verified (500000 matches)
+8000000 rows per input: every run verified (4000000 matches)
+32000000 rows per input: every run verified (16000000 matches)
+== 04-radix-join-seed7 finished in 43 s
+== 04-radix-join-seed2026  (started 22:35:51)
+1000000 rows per input: every run verified (500000 matches)
+8000000 rows per input: every run verified (4000000 matches)
+32000000 rows per input: every run verified (16000000 matches)
+== 04-radix-join-seed2026 finished in 44 s
+== Threads experiment uses 12 radix bits in 1 pass(es), fastest at 16000000 rows in experiment 4
+== 05-parallel-join  (started 22:36:35)
+verified warmup 0 of 15
+recorded run 1 of 15
+recorded run 2 of 15
+recorded run 3 of 15
+recorded run 4 of 15
+recorded run 5 of 15
+recorded run 6 of 15
+recorded run 7 of 15
+recorded run 8 of 15
+recorded run 9 of 15
+recorded run 10 of 15
+recorded run 11 of 15
+recorded run 12 of 15
+recorded run 13 of 15
+recorded run 14 of 15
+recorded run 15 of 15
+== 05-parallel-join finished in 37 s
+== All experiments done: results
+exit=0

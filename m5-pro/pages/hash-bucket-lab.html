@@ -1,0 +1,464 @@
+<title>Hash Bucket Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one reading column (~68ch) with full-width "bench" panels for the lab and the bit diagrams. */
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --surface-2: #eceff3; --line: #d9dee5;
+  --fg: #131820; --fg-2: #47505d; --muted: #6a7280;
+  --accent: #2a78d6; --accent-2: #eb6834; --accent-soft: #e3eefb;
+  --h0: #eceff3; --h1: #cde2fb; --h2: #9ec5f4; --h3: #6da7ec; --h4: #3987e5; --h5: #256abf; --h6: #184f95; --h7: #0d366b;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111317; --surface: #191c21; --surface-2: #23272e; --line: #30353d;
+    --fg: #eef0f3; --fg-2: #b8bfc9; --muted: #8b939e;
+    --accent: #3987e5; --accent-2: #d95926; --accent-soft: #1b2b42;
+    --h0: #23272e; --h1: #104281; --h2: #184f95; --h3: #1c5cab; --h4: #256abf; --h5: #3987e5; --h6: #6da7ec; --h7: #9ec5f4;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111317; --surface: #191c21; --surface-2: #23272e; --line: #30353d;
+  --fg: #eef0f3; --fg-2: #b8bfc9; --muted: #8b939e;
+  --accent: #3987e5; --accent-2: #d95926; --accent-soft: #1b2b42;
+  --h0: #23272e; --h1: #104281; --h2: #184f95; --h3: #1c5cab; --h4: #256abf; --h5: #3987e5; --h6: #6da7ec; --h7: #9ec5f4;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 28px; }
+.col { max-width: 68ch; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 2.9rem); font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 1.55rem; font-weight: 600; letter-spacing: -0.01em; }
+h3 { font-size: 1.08rem; font-weight: 600; }
+p { margin: 0; }
+.stack { display: grid; gap: 14px; }
+.eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 1.15rem; color: var(--fg-2); }
+code, .mono { font-family: var(--mono); font-size: 0.92em; }
+code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.simple { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; display: grid; gap: 6px; }
+.simple p { font-size: 1.05rem; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: grid; gap: 18px; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.controls { display: grid; gap: 14px; }
+.ctl { display: grid; gap: 6px; }
+.ctl label, .ctl .lab { font-size: 0.85rem; font-weight: 600; color: var(--fg-2); }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { font: inherit; font-size: 0.88rem; padding: 6px 11px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); color: var(--fg); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.seg button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.stat { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; display: grid; gap: 2px; }
+.stat .k { font-size: 0.78rem; color: var(--muted); }
+.stat .v { font-family: var(--mono); font-size: 1.2rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.stat .s { font-size: 0.75rem; color: var(--muted); }
+.chart { width: 100%; overflow-x: auto; }
+.chart svg { display: block; width: 100%; height: auto; min-width: 520px; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.82rem; color: var(--fg-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.tick-sw { width: 14px; height: 0; border-top: 2px solid var(--fg); display: inline-block; }
+.note { font-size: 0.85rem; color: var(--muted); }
+.strip { display: grid; grid-template-columns: repeat(64, 1fr); gap: 2px; }
+.strip div { aspect-ratio: 1; border-radius: 2px; background: var(--h0); }
+.ramp { display: flex; gap: 2px; align-items: center; font-size: 0.75rem; color: var(--muted); }
+.ramp i { width: 18px; height: 10px; border-radius: 2px; display: inline-block; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; }
+.bits { display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 3px; }
+.bit { font-family: var(--mono); font-size: 0.78rem; text-align: center; padding: 6px 0; border-radius: 4px; background: var(--surface-2); color: var(--fg-2); }
+.bit.p { background: var(--accent); color: #fff; }
+.bit.b { background: var(--accent-2); color: #fff; }
+.bit.both { background: repeating-linear-gradient(135deg, var(--accent) 0 5px, var(--accent-2) 5px 10px); color: #fff; }
+.bitlabels { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+.keyrow { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+input[type="number"], input[type="range"] { font: inherit; }
+input[type="number"] { width: 9rem; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--fg); font-family: var(--mono); }
+.steps { display: grid; gap: 6px; font-family: var(--mono); font-size: 0.86rem; color: var(--fg-2); overflow-x: auto; }
+.steps b { color: var(--fg); font-weight: 500; }
+.cmp { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; gap: 10px; background: var(--surface); }
+.card dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 0; font-size: 0.92rem; }
+.card dt { color: var(--fg-2); }
+.card dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.tag { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+#tip { position: fixed; pointer-events: none; background: var(--fg); color: var(--bg); font-size: 0.8rem; padding: 6px 9px; border-radius: 6px; font-family: var(--mono); z-index: 20; }
+ul.clean { margin: 0; padding-left: 1.1rem; display: grid; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="stack col">
+    <div class="eyebrow">Radix hash join project · simple hash join</div>
+    <h1>Hash Bucket Lab</h1>
+    <p class="lede">How our hash join files rows into buckets, how evenly our hash function spreads them, and why the number of buckets is a choice we have to test instead of guess.</p>
+  </header>
+
+  <section class="simple col" aria-label="Short version">
+    <p><b>Short version.</b> A hash table is a row of numbered boxes, called buckets.</p>
+    <p>A hash function turns each key into a box number. Rows that get the same number share a box, in a short list called a chain.</p>
+    <p>To find a key, the join opens one box and checks every row in it. More boxes means shorter chains, but the row of boxes takes more memory.</p>
+  </section>
+
+  <section class="stack col">
+    <h2>What our code does today</h2>
+    <p>The simple hash join (<code>src/hash_join.c</code>) keeps two arrays. The bucket array holds, for each box, the position of the first row in its chain. The next array holds, for each row, the position of the next row in the same chain.</p>
+    <p>To pick a box, it scrambles the key with a fixed formula and keeps the lowest bits of the result. The formula is <code>mix</code>, the finishing step of a published random-number generator called SplitMix64. It uses shifts, exclusive-or and two multiplications. The number of boxes is always a power of two, so "keep the lowest bits" is the same as "take the remainder".</p>
+    <p>How many boxes? Two rules exist in our history, and neither was chosen by an experiment:</p>
+    <ul class="clean">
+      <li><b>Week 2 rule</b> (commit <code>4fd6a67</code>): at least 2 boxes per left row, rounded up to a power of two. The notes give one reason: fewer rows per box means shorter chains, at the cost of memory.</li>
+      <li><b>Varun's rule</b> (commit <code>d28429e</code>, 22 November): about 1 box per 4 left rows, rounded up to a power of two. The commit gives no reason.</li>
+    </ul>
+    <p>We also never checked how evenly <code>mix</code> spreads our keys. The lab below and the numbers after it do that check.</p>
+  </section>
+
+  <section class="panel" aria-label="Interactive lab">
+    <div class="stack">
+      <div class="eyebrow">Lab</div>
+      <h2>Fill a hash table and look at the chains</h2>
+      <p class="note">Everything here is computed in your browser with the same formulas as our C code. Change a setting and the table is rebuilt.</p>
+    </div>
+    <div class="controls">
+      <div class="ctl"><span class="lab" id="lab-pattern">Which keys go in</span>
+        <div class="seg" role="group" aria-labelledby="lab-pattern" id="pattern">
+          <button data-v="dense" aria-pressed="true">0, 1, 2, … (our benchmark)</button>
+          <button data-v="random">Random keys</button>
+          <button data-v="stride">Multiples of 1024</button>
+          <button data-v="skew">Few keys repeated often</button>
+        </div></div>
+      <div class="ctl"><span class="lab" id="lab-hash">How a key becomes a box number</span>
+        <div class="seg" role="group" aria-labelledby="lab-hash" id="hash">
+          <button data-v="mix" aria-pressed="true">Scramble with mix (ours)</button>
+          <button data-v="id">Use the key itself</button>
+          <button data-v="mullo">Multiply, keep low bits</button>
+          <button data-v="mulhi">Multiply, keep high bits</button>
+        </div></div>
+      <div class="ctl"><span class="lab" id="lab-load">Rows per box you ask for</span>
+        <div class="seg" role="group" aria-labelledby="lab-load" id="load">
+          <button data-v="0.25">¼</button>
+          <button data-v="0.5" aria-pressed="true">½ (Week 2)</button>
+          <button data-v="1">1</button>
+          <button data-v="2">2</button>
+          <button data-v="4">4 (Varun)</button>
+          <button data-v="8">8</button>
+          <button data-v="16">16</button>
+        </div></div>
+      <div class="ctl"><span class="lab" id="lab-n">Rows in the table</span>
+        <div class="seg" role="group" aria-labelledby="lab-n" id="rows">
+          <button data-v="10000">10,000</button>
+          <button data-v="65536" aria-pressed="true">65,536</button>
+          <button data-v="200000">200,000</button>
+        </div></div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="stack">
+      <h3>How many boxes hold 0, 1, 2, … rows</h3>
+      <div class="legend"><span><i class="sw" style="background:var(--accent)"></i>Measured with this hash</span><span><i class="tick-sw"></i>What a perfectly random hash would give</span></div>
+      <div class="chart" id="hist"></div>
+    </div>
+    <div class="stack">
+      <h3>The first 512 boxes, darker = longer chain</h3>
+      <div class="strip" id="strip" aria-label="Chain length of the first 512 buckets"></div>
+      <div class="ramp" id="ramp"></div>
+    </div>
+    <p class="note" id="lab-explain"></p>
+  </section>
+
+  <section class="stack col">
+    <h2>The two rules at our real size</h2>
+    <p>Same formula, same keys as the benchmark (left keys 0 to 1,999,999; right keys the even numbers up to 3,999,998, so half of the lookups find a match). Computed with the exact <code>mix</code> from the C code.</p>
+  </section>
+  <div class="cmp">
+    <div class="card"><div class="tag">Week 2 rule · 2 boxes per row</div>
+      <dl>
+        <dt>Boxes</dt><dd>4,194,304</dd>
+        <dt>Rows per box</dt><dd>0.48</dd>
+        <dt>Bucket array</dt><dd>32 MiB</dd>
+        <dt>Empty boxes</dt><dd>62.1%</dd>
+        <dt>Random hash would give</dt><dd>62.1%</dd>
+        <dt>Longest chain</dt><dd>8 rows</dd>
+        <dt>Rows checked, key present</dt><dd>1.48</dd>
+        <dt>Rows checked, key absent</dt><dd>0.48</dd>
+        <dt>Rows checked, our probe mix</dt><dd>0.98</dd>
+      </dl></div>
+    <div class="card"><div class="tag">Varun's rule · 1 box per 4 rows</div>
+      <dl>
+        <dt>Boxes</dt><dd>524,288</dd>
+        <dt>Rows per box</dt><dd>3.81</dd>
+        <dt>Bucket array</dt><dd>4 MiB</dd>
+        <dt>Empty boxes</dt><dd>2.2%</dd>
+        <dt>Random hash would give</dt><dd>2.2%</dd>
+        <dt>Longest chain</dt><dd>18 rows</dd>
+        <dt>Rows checked, key present</dt><dd>4.82</dd>
+        <dt>Rows checked, key absent</dt><dd>3.82</dd>
+        <dt>Rows checked, our probe mix</dt><dd>4.32</dd>
+      </dl></div>
+  </div>
+  <section class="stack col">
+    <p><b>The hash is fine.</b> With both rules the share of empty boxes matches a perfectly random hash to one decimal place, and so does every other chain length (try it in the lab). So <code>mix</code> spreads our keys as evenly as we could ask.</p>
+    <p><b>The bucket count is a real trade-off.</b> Each lookup reads one box, then two arrays for every row in the chain: the row's key and its link to the next row. Those reads land at random places.</p>
+    <ul class="clean">
+      <li>The Week 2 rule checks about 1 row per lookup on average over our probes (half find a match, half don't), because our code walks the whole chain even after a match, but its 32 MiB box array is twice the size of the M5's 16 MiB fast memory (its L2 cache), so most box reads go to main memory.</li>
+      <li>Varun's rule shrinks the box array to 4 MiB, which fits in that fast memory, but each lookup checks about 4.3 rows, so it makes about 4 times as many random reads into the row arrays.</li>
+    </ul>
+    <p>Which effect wins depends on the machine, so we timed both rules on the M5 tonight (experiment 2, 7 runs per size after 1 warm-up run, medians).</p>
+  </section>
+  <section class="panel" aria-label="Measured on the M5">
+    <div class="stack">
+      <div class="eyebrow">Measured · Apple M5 · 22 November</div>
+      <h2>Varun's rule was slower at every size</h2>
+      <p>Building the table got faster with fewer boxes, because there is less memory to clear and write. Looking rows up got much slower, because every lookup walks a chain about 4 times as long. Lookups are most of the work, so the total got 1.65 to 2.52 times slower.</p>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th class="num">Rows per input</th><th class="num">Week 2 boxes</th><th class="num">Build</th><th class="num">Lookups</th><th class="num">Total</th><th class="num">Varun boxes</th><th class="num">Build</th><th class="num">Lookups</th><th class="num">Total</th><th class="num">Slower by</th></tr></thead>
+      <tbody>
+        <tr><td class="num">10,000</td><td class="num">32,768</td><td class="num">0.017</td><td class="num">0.023</td><td class="num">0.040</td><td class="num">4,096</td><td class="num">0.011</td><td class="num">0.055</td><td class="num">0.066</td><td class="num">1.65×</td></tr>
+        <tr><td class="num">100,000</td><td class="num">262,144</td><td class="num">0.133</td><td class="num">1.008</td><td class="num">1.141</td><td class="num">32,768</td><td class="num">0.139</td><td class="num">2.096</td><td class="num">2.237</td><td class="num">1.96×</td></tr>
+        <tr><td class="num">500,000</td><td class="num">1,048,576</td><td class="num">0.704</td><td class="num">7.311</td><td class="num">8.079</td><td class="num">131,072</td><td class="num">0.716</td><td class="num">13.832</td><td class="num">14.539</td><td class="num">1.80×</td></tr>
+        <tr><td class="num">1,000,000</td><td class="num">2,097,152</td><td class="num">2.822</td><td class="num">19.228</td><td class="num">21.915</td><td class="num">262,144</td><td class="num">1.102</td><td class="num">35.864</td><td class="num">37.044</td><td class="num">1.69×</td></tr>
+        <tr><td class="num">2,000,000</td><td class="num">4,194,304</td><td class="num">6.532</td><td class="num">47.254</td><td class="num">54.042</td><td class="num">524,288</td><td class="num">2.237</td><td class="num">133.855</td><td class="num">136.401</td><td class="num">2.52×</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">Times in milliseconds. "Slower by" = Varun total ÷ Week 2 total. Results: <code>m5-pro/results/02-simple-hash-join</code> and <code>m5-pro/results/02-simple-hash-join-quarter-buckets</code>.</p>
+    <p>This compares two points, ½ and about 4 rows per box. It does not show that ½ is the best choice: ¼, 1 and 2 rows per box were never timed. The experiment below fills that gap.</p>
+  </section>
+
+  <section class="panel" aria-label="Hash bits in the radix join">
+    <div class="stack">
+      <div class="eyebrow">Radix join</div>
+      <h2>One hash value, two jobs</h2>
+      <p>The radix join uses the scrambled key twice. Its lowest B bits choose the partition. Inside a partition, every row has the same lowest B bits, so those bits can't tell rows apart any more. The bucket number must come from the bits above them. Our radix join does this: <code>hash_build</code> and <code>hash_probe</code> in <code>include/common.h</code> shift the hash right by B before keeping the bucket bits.</p>
+    </div>
+    <div class="keyrow">
+      <div class="ctl"><label for="key">Key</label><input type="number" id="key" value="42" min="0" max="4294967295"></div>
+      <div class="ctl"><label for="rb">Partition bits B: <span id="rbv" class="mono">8</span></label><input type="range" id="rb" min="2" max="12" value="8"></div>
+      <div class="ctl"><label for="bb">Bucket bits: <span id="bbv" class="mono">10</span></label><input type="range" id="bb" min="2" max="12" value="10"></div>
+    </div>
+    <div class="steps" id="steps"></div>
+    <div class="stack">
+      <div class="legend"><span><i class="sw" style="background:var(--accent)"></i>Partition bits</span><span><i class="sw" style="background:var(--accent-2)"></i>Bucket bits</span><span><i class="sw" style="background:repeating-linear-gradient(135deg,var(--accent) 0 3px,var(--accent-2) 3px 6px)"></i>Used for both (the mistake)</span></div>
+      <div><div class="note">Correct: bucket bits start above the partition bits</div><div class="bits" id="bits-ok"></div></div>
+      <div><div class="note">Mistake: bucket bits taken from the bottom again</div><div class="bits" id="bits-bad"></div></div>
+      <div class="bitlabels"><span>bit 23</span><span>bit 0</span></div>
+    </div>
+    <p>Measured at our real size: with 8 partition bits, partition 0 holds 7,814 rows and gets 16,384 boxes. Taking the bucket bits from above the partition bits, the rows use 6,222 boxes and the longest chain is 6 rows. Taking them from the bottom again, the rows can only reach 64 boxes, and the longest chain is 147 rows.</p>
+  </section>
+
+  <section class="stack col">
+    <h2>What we never measured</h2>
+    <p>Our professor's point stands. Before tonight every timing used one bucket rule and one hash function. Tonight's run compared two bucket rules, but two points can't show where the best one is. The hash check above settles one half for our keys: <code>mix</code> spreads them like a random hash. The other half, the bucket count, needs the sweep below.</p>
+  </section>
+  <section class="panel" aria-label="Proposed experiment">
+    <div class="stack">
+      <div class="eyebrow">Proposed · experiment 6</div>
+      <h2>Bucket count and hash function</h2>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Question</th><th>What changes</th><th>What stays fixed</th><th>What we record</th></tr></thead>
+      <tbody>
+        <tr><td>How many rows per box is fastest for the simple join?</td><td>Rows per box: ¼, ½, 1, 2, 4, 8, 16. Input sizes 2<sup>17</sup> to 2<sup>24</sup> rows, so the power-of-two rounding never shifts the real rows per box.</td><td>Keys 0 to N−1, hash <code>mix</code>, the M5, 15 runs per setting in shuffled order</td><td>Build and probe time, box-array size, rows checked per lookup, longest chain</td></tr>
+        <tr><td>Is the best choice different inside the radix join?</td><td>Same rows-per-box sweep, at the fastest radix setting from experiment 4</td><td>Same as above</td><td>Same, per partition</td></tr>
+        <tr><td>Does the hash function matter?</td><td>Hash: key itself, multiply and keep high bits, <code>mix</code>, and the M5's built-in checksum instruction (CRC32)</td><td>Rows per box at the winner of question 1</td><td>Time, chain lengths compared with a random hash</td></tr>
+        <tr><td>Which keys break which hash?</td><td>Keys: 0 to N−1, random, multiples of 1024, a few keys repeated often</td><td>As above</td><td>Longest chain, rows checked per lookup, time</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">The first two rows answer the professor's question directly. The last two show why we chose <code>mix</code>: a simple formula like "use the key itself" is perfect for keys 0, 1, 2, … and collapses on multiples of 1024, as the lab shows. Repeated keys make long chains with every hash, because equal keys always share a box.</p>
+  </section>
+  <div id="tip" hidden></div>
+</div>
+
+<script>
+const MASK = (1n << 64n) - 1n;
+const FIB = 0x9E3779B97F4A7C15n;
+function mix(v) {
+  v &= MASK;
+  v ^= v >> 30n; v = (v * 0xbf58476d1ce4e5b9n) & MASK;
+  v ^= v >> 27n; v = (v * 0x94d049bb133111ebn) & MASK;
+  return v ^ (v >> 31n);
+}
+const state = { pattern: "dense", hash: "mix", load: 0.5, rows: 65536 };
+const cache = new Map();
+
+function keysFor(pattern, n) {
+  const keys = new Array(n);
+  let s = 2463534242;
+  const rnd = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s; };
+  for (let i = 0; i < n; i++) {
+    if (pattern === "dense") keys[i] = BigInt(i);
+    else if (pattern === "random") keys[i] = BigInt(rnd());
+    else if (pattern === "stride") keys[i] = BigInt(i) * 1024n;
+    else { const u = rnd() / 4294967296; keys[i] = BigInt(Math.floor(Math.exp(u * Math.log(n)))); }
+  }
+  return keys;
+}
+function hashes(pattern, hash, n) {
+  const id = pattern + "|" + hash + "|" + n;
+  if (cache.has(id)) return cache.get(id);
+  const keys = keysFor(pattern, n);
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const k = keys[i];
+    out[i] = hash === "mix" ? mix(k) : hash === "id" ? k : (k * FIB) & MASK;
+  }
+  cache.set(id, out);
+  return out;
+}
+function pow2AtLeast(x) { let b = 1; while (b < x) b *= 2; return b; }
+const fmt = (x, d = 0) => x.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+function bytesText(b) { return b >= 1048576 ? fmt(b / 1048576, b >= 10485760 ? 0 : 1) + " MiB" : fmt(b / 1024, 0) + " KiB"; }
+
+function build() {
+  const n = state.rows, nb = pow2AtLeast(Math.ceil(n / state.load));
+  const bits = Math.log2(nb);
+  const hs = hashes(state.pattern, state.hash, n);
+  const counts = new Uint32Array(nb);
+  const mask = BigInt(nb - 1), shift = BigInt(64 - bits);
+  for (let i = 0; i < n; i++) {
+    const h = state.hash === "mulhi" ? (hs[i] >> shift) : hs[i];
+    counts[Number(h & mask)]++;
+  }
+  return { n, nb, counts };
+}
+
+function render() {
+  const { n, nb, counts } = build();
+  const lam = n / nb;
+  let empty = 0, longest = 0, sq = 0;
+  const top = 12, hist = new Array(top + 1).fill(0);
+  for (let i = 0; i < nb; i++) { const c = counts[i]; if (!c) empty++; if (c > longest) longest = c; sq += c * c; hist[Math.min(c, top)]++; }
+  const expect = []; let p = Math.exp(-lam), acc = 0;
+  for (let k = 0; k < top; k++) { expect.push(nb * p); acc += p; p = p * lam / (k + 1); }
+  expect.push(nb * Math.max(0, 1 - acc));
+  const randomEmpty = 100 * Math.exp(-lam);
+  const perLookup = sq / n;
+  document.getElementById("stats").innerHTML = [
+    ["Boxes", fmt(nb), "a power of two ≥ rows ÷ " + state.load],
+    ["Rows per box", fmt(lam, 2), "after rounding up"],
+    ["Empty boxes", fmt(100 * empty / nb, 1) + "%", "random hash: " + fmt(randomEmpty, 1) + "%"],
+    ["Longest chain", fmt(longest) + (longest === 1 ? " row" : " rows"), ""],
+    ["Rows checked per lookup", fmt(perLookup, 2), "for a key that is in the table"],
+    ["Bucket array", bytesText(nb * 8), "8 bytes per box"],
+  ].map(([k, v, s]) => `<div class="stat"><span class="k">${k}</span><span class="v">${v}</span><span class="s">${s}</span></div>`).join("");
+  drawHist(hist, expect, nb);
+  drawStrip(counts);
+  const msgs = {
+    "dense|id": "Keys 0, 1, 2, … with the key itself as the box number fill the boxes perfectly evenly. This only works because our test keys are consecutive.",
+    "stride|id": "Multiples of 1024 all have their lowest 10 bits equal to zero, so keeping the low bits throws away everything that differs. Almost every row lands in a handful of boxes.",
+    "stride|mullo": "Multiplying keeps the low bits of the product tied to the low bits of the key, so multiples of 1024 still collapse into a few boxes.",
+    "skew|mix": "When the same key appears many times, all its copies share one box whatever the hash does. That gives a few very long chains.",
+  };
+  const key = state.pattern + "|" + state.hash;
+  document.getElementById("lab-explain").textContent = msgs[key] || (state.hash === "mix" || state.hash === "mulhi"
+    ? "This hash spreads the keys close to what a perfectly random hash would do: the blue bars sit on the black ticks."
+    : "Compare the blue bars with the black ticks: where they differ, this hash is spreading the keys unevenly.");
+}
+
+const tip = document.getElementById("tip");
+function showTip(e, text) { tip.textContent = text; tip.hidden = false; tip.style.left = (e.clientX + 12) + "px"; tip.style.top = (e.clientY - 34) + "px"; }
+function hideTip() { tip.hidden = true; }
+
+function drawHist(hist, expect, nb) {
+  const W = 760, H = 260, L = 64, R = 12, T = 12, B = 40;
+  const maxV = Math.max(...hist, ...expect) || 1;
+  const nice = (v) => { const e = Math.pow(10, Math.floor(Math.log10(v))); const m = v / e; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * e; };
+  const ymax = nice(maxV);
+  const cats = hist.length, bw = (W - L - R) / cats, barW = Math.min(24, bw * 0.6);
+  const y = (v) => T + (H - T - B) * (1 - v / ymax);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Number of boxes by chain length">`;
+  for (let i = 0; i <= 4; i++) {
+    const v = ymax * i / 4, yy = y(v);
+    s += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="var(--line)" stroke-width="1"/>`;
+    s += `<text x="${L - 8}" y="${yy + 4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--mono)">${v >= 10000 ? fmt(v / 1000) + "K" : fmt(v)}</text>`;
+  }
+  for (let c = 0; c < cats; c++) {
+    const cx = L + bw * c + bw / 2, v = hist[c], top = y(v), base = y(0);
+    const h = Math.max(0, base - top);
+    if (h > 0) s += `<path d="M${cx - barW / 2},${base} V${top + Math.min(4, h)} q0,-4 4,-4 H${cx + barW / 2 - 4} q4,0 4,4 V${base} Z" fill="var(--accent)"/>`;
+    const ey = y(expect[c]);
+    s += `<line x1="${cx - barW / 2 - 5}" x2="${cx + barW / 2 + 5}" y1="${ey}" y2="${ey}" stroke="var(--fg)" stroke-width="2" stroke-linecap="round"/>`;
+    s += `<text x="${cx}" y="${H - B + 18}" text-anchor="middle" font-size="12" fill="var(--fg-2)" font-family="var(--mono)">${c === cats - 1 ? c + "+" : c}</text>`;
+    s += `<rect x="${cx - bw / 2}" y="${T}" width="${bw}" height="${H - T - B}" fill="transparent" data-c="${c}"/>`;
+  }
+  s += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle" font-size="12" fill="var(--muted)">rows in the box</text>`;
+  s += `<line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" stroke="var(--muted)" stroke-width="1"/></svg>`;
+  const el = document.getElementById("hist");
+  el.innerHTML = s;
+  el.querySelectorAll("rect[data-c]").forEach((r) => {
+    const c = +r.dataset.c;
+    r.addEventListener("mousemove", (e) => showTip(e, `${c === cats - 1 ? c + " or more" : c} rows: ${fmt(hist[c])} boxes (random hash: ${fmt(expect[c])})`));
+    r.addEventListener("mouseleave", hideTip);
+  });
+}
+
+const RAMP = ["--h0", "--h1", "--h2", "--h3", "--h4", "--h5", "--h6", "--h7"];
+function drawStrip(counts) {
+  const el = document.getElementById("strip");
+  let s = "";
+  for (let i = 0; i < 512 && i < counts.length; i++) {
+    const c = counts[i];
+    s += `<div style="background:var(${RAMP[Math.min(c, 7)]})" data-i="${i}" data-c="${c}"></div>`;
+  }
+  el.innerHTML = s;
+}
+document.getElementById("strip").addEventListener("mousemove", (e) => {
+  const d = e.target.closest("div[data-i]");
+  if (d) showTip(e, `box ${d.dataset.i}: ${d.dataset.c} rows`); else hideTip();
+});
+document.getElementById("strip").addEventListener("mouseleave", hideTip);
+document.getElementById("ramp").innerHTML = "<span>0</span>" + RAMP.map((v) => `<i style="background:var(${v})"></i>`).join("") + "<span>7+ rows</span>";
+
+function wire(id, key, num) {
+  const g = document.getElementById(id);
+  g.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    g.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+    state[key] = num ? Number(b.dataset.v) : b.dataset.v;
+    render();
+  });
+}
+wire("pattern", "pattern"); wire("hash", "hash"); wire("load", "load", true); wire("rows", "rows", true);
+
+/* ---------- bit diagram ---------- */
+function bitsRow(el, h, B, b, overlap) {
+  let s = "";
+  for (let i = 23; i >= 0; i--) {
+    const bit = (h >> BigInt(i)) & 1n;
+    const isP = i < B, isB = overlap ? i < b : (i >= B && i < B + b);
+    const cls = isP && isB ? "both" : isP ? "p" : isB ? "b" : "";
+    s += `<div class="bit ${cls}" title="bit ${i}">${bit}</div>`;
+  }
+  el.innerHTML = s;
+}
+function renderBits() {
+  const keyEl = document.getElementById("key");
+  let k = BigInt(Math.max(0, Math.min(4294967295, Math.floor(Number(keyEl.value) || 0))));
+  const B = +document.getElementById("rb").value, b = +document.getElementById("bb").value;
+  document.getElementById("rbv").textContent = B; document.getElementById("bbv").textContent = b;
+  const h = mix(k);
+  const part = h & ((1n << BigInt(B)) - 1n);
+  const okBucket = (h >> BigInt(B)) & ((1n << BigInt(b)) - 1n);
+  const badBucket = h & ((1n << BigInt(b)) - 1n);
+  const reachable = b > B ? 2 ** (b - B) : 1;
+  document.getElementById("steps").innerHTML =
+    `<div>mix(${k}) = <b>0x${h.toString(16).padStart(16, "0")}</b></div>` +
+    `<div>partition = lowest ${B} bits = <b>${part}</b> of ${fmt(2 ** B)}</div>` +
+    `<div>bucket (correct) = next ${b} bits = <b>${okBucket}</b> of ${fmt(2 ** b)}</div>` +
+    `<div>bucket (mistake) = lowest ${b} bits = <b>${badBucket}</b>: every row of partition ${part} lands in one of only ${fmt(reachable)} box${reachable === 1 ? "" : "es"}</div>`;
+  bitsRow(document.getElementById("bits-ok"), h, B, b, false);
+  bitsRow(document.getElementById("bits-bad"), h, B, b, true);
+}
+["key", "rb", "bb"].forEach((id) => document.getElementById(id).addEventListener("input", renderBits));
+
+render();
+renderBits();
+</script>

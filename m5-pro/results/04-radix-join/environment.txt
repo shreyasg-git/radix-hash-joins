@@ -1,0 +1,19 @@
+timer=CLOCK_UPTIME_RAW (nanoseconds)
+compiler=Apple LLVM 21.0.0 (clang-2100.1.1.101)
+binary_bits=64
+record_bytes=8
+online_cpus=10
+page_bytes=16384
+cache_L1_Data=128K
+cache_L2_Unified=16384K
+cpu_model=Apple M5
+thread_pinning=not supported on macOS; threads use the highest QoS class (prefers performance cores)
+experiment=radix_join
+logical_cpu=-1
+repeats=15
+warmup_runs=1
+seed=42
+run_order=shuffled every round
+counters_available=none
+timer_call_ns=8.1
+timing=clean (no clock reads inside the join; build split from a separate build-only pass, probe = join - build)

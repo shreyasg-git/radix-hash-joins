@@ -1,0 +1,10 @@
+{
+  "recorded_scans": 660,
+  "groups": 22,
+  "samples_per_group": 30,
+  "checksums_consistent": true,
+  "bounds_valid": true,
+  "duplicate_measurements": false,
+  "timer_pair_median_ns": 0.0,
+  "timer_pair_p95_ns": 42.0
+}
