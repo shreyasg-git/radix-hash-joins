@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hash_join.c explained</title>
+<link rel="stylesheet" href="explainer.css">
+</head>
+<body>
+<main>
+<nav class="top"><a href="index.html">&larr; All explainers</a></nav>
+<h1><code>hash_join.c</code></h1>
+<p class="sub">Experiment 2: the simple hash join. File: <code>m5-pro/src/hash_join.c</code>, 341 lines.</p>
+
+<div class="box">
+<p><b>The short version.</b> A join pairs up the rows of two tables whose key is equal. This program does it in two steps. <b>Build:</b> put every row of the left table into a lookup structure, indexed by a scrambled copy of its key. <b>Probe:</b> for each row of the right table, look in that structure for left rows with the same key. It does this at 6 table sizes (10,000 to 5,000,000 rows), times each step, and writes the times to a file. It is the baseline the radix join is compared against.</p>
+</div>
+
+<div class="box warn">
+<p><b>M5 version vs main version.</b> This file is a copy of <code>src/hash_join.c</code> with 3 changes for the Mac: a nanosecond timer, a request for the fast cores instead of pinning to one core, and a build switch for the bucket rule. By default it uses <b>at least 2 buckets per left row</b>. If you compile with <code>-DQUARTER_BUCKETS</code> it uses about <b>1 bucket per 4 left rows</b>, which is the rule in the main-branch file. Everything else is the same.</p>
+</div>
+
+<h2>The data types</h2>
+<div class="block"><h3>Four small structures <span class="lines">lines 24&ndash;45</span></h3>
+<dl>
+<dt>What</dt><dd>
+<ul>
+<li><code>Record</code>: one row. <code>key</code> is the value we join on. <code>row_id</code> is the row's position in its original table. 8 bytes.</li>
+<li><code>Pair</code>: one result. The left row's <code>row_id</code> and the right row's <code>row_id</code>.</li>
+<li><code>HashTable</code>: the lookup structure. <code>records</code> points to the left rows. <code>buckets[b]</code> holds the index of the first left row in bucket <code>b</code>, or <code>SIZE_MAX</code> if the bucket is empty. <code>next[i]</code> holds the index of the next left row in the same bucket as row <code>i</code>, or <code>SIZE_MAX</code> at the end. <code>bucket_count</code> is the number of buckets.</li>
+<li><code>JoinResult</code>: what <code>probe</code> returns. <code>matches</code> (how many pairs were found) and <code>checksum</code> (one number that fingerprints all pairs).</li>
+</ul>
+Each bucket is a chain of rows linked by array positions. There is no separate allocation per row.
+</dd></dl></div>
+
+<h2>Small helper functions</h2>
+<div class="block"><h3><code>allocate</code> <span class="lines">lines 47&ndash;58</span></h3>
+<dl><dt>Input</dt><dd>A count and an element size.</dd>
+<dt>Returns</dt><dd>A block of memory.</dd>
+<dt>What</dt><dd>Wraps <code>malloc</code>. Stops the program if count &times; size would overflow or memory runs out. Asks for 1 byte when the count is 0, so the result is never <code>NULL</code>.</dd></dl></div>
+
+<div class="block"><h3><code>mix</code> <span class="lines">lines 60&ndash;66</span></h3>
+<dl><dt>Input</dt><dd>A 64-bit number.</dd>
+<dt>Returns</dt><dd>A scrambled 64-bit number.</dd>
+<dt>What</dt><dd>The hash function (SplitMix64). It shifts, multiplies and mixes the bits so that keys 1, 2, 3 land in unrelated places instead of side by side.</dd></dl></div>
+
+<div class="block"><h3><code>now_ns</code> <span class="lines">lines 68&ndash;78</span></h3>
+<dl><dt>Returns</dt><dd>The current time in nanoseconds.</dd>
+<dt>What</dt><dd>On the Mac it reads <code>CLOCK_UPTIME_RAW</code>, which ticks in nanoseconds. On Linux it reads <code>CLOCK_MONOTONIC</code>, a clock that never goes backwards.</dd></dl></div>
+
+<h2>Build and probe</h2>
+<div class="block"><h3><code>build</code> <span class="lines">lines 80&ndash;99</span></h3>
+<dl><dt>Input</dt><dd>The left rows and their count.</dd>
+<dt>Returns</dt><dd>A <code>HashTable</code>.</dd>
+<dt>What</dt><dd>
+<ol>
+<li>Picks the bucket count: the smallest power of two that is at least 2 &times; count (default), or at least ceil(count / 4) with <code>-DQUARTER_BUCKETS</code>. Zero rows still gets 1 bucket.</li>
+<li>Allocates <code>buckets</code> and <code>next</code>, and sets every bucket to empty.</li>
+<li>For each left row, computes <code>mix(key) &amp; (bucket_count - 1)</code>. Because the count is a power of two, this one bit-mask does the job of a remainder. Then inserts the row at the front of that bucket's chain: <code>next[i]</code> takes the old first row, and <code>buckets[bucket]</code> takes <code>i</code>.</li>
+</ol>
+With the default rule a bucket holds at most about 0.5 rows on average. With the quarter rule it holds between 2 and 4.
+</dd></dl></div>
+
+<div class="block"><h3><code>probe</code> <span class="lines">lines 101&ndash;123</span></h3>
+<dl><dt>Input</dt><dd>The table, the right rows, their count, and optionally an output buffer for pairs (<code>pairs</code>, <code>capacity</code>).</dd>
+<dt>Returns</dt><dd>A <code>JoinResult</code>.</dd>
+<dt>What</dt><dd>For each right row, finds its bucket the same way and walks that bucket's chain. Different keys can share a bucket, so it compares <code>records[row].key == right[i].key</code> on every row. On a match it builds a <code>Pair</code> of the two <code>row_id</code>s, saves it only if <code>pairs</code> is not <code>NULL</code> (and stops with an error if the buffer is full), adds 1 to <code>matches</code>, and adds <code>mix(pair)</code> to <code>checksum</code>.
+<br>The benchmark passes <code>NULL</code>, so it only counts. The tests pass a buffer so they can compare every pair. The checksum uses addition, so the order pairs are found in does not change it.</dd></dl></div>
+
+<div class="block"><h3><code>release</code> <span class="lines">lines 125&ndash;128</span></h3>
+<dl><dt>What</dt><dd>Frees <code>buckets</code> and <code>next</code>. It does not free the left rows, because the table does not own them.</dd></dl></div>
+
+<h2>The correctness test</h2>
+<div class="block"><h3><code>reference_join</code> and <code>compare_pairs</code> <span class="lines">lines 130&ndash;147</span></h3>
+<dl><dt>What</dt><dd><code>reference_join</code> is the slow, obviously correct join: it compares every left row with every right row (a nested loop) and returns the pairs. <code>compare_pairs</code> orders pairs by left row, then right row, so two lists can be compared after sorting.</dd></dl></div>
+
+<div class="block"><h3><code>check_case</code> <span class="lines">lines 149&ndash;166</span></h3>
+<dl><dt>Input</dt><dd>A name and two small tables.</dd>
+<dt>What</dt><dd>Runs the reference join and the hash join on the same input, sorts both outputs, and compares the counts and every byte of every pair. Prints <code>FAIL: &lt;name&gt;</code> and exits on any difference.</dd></dl></div>
+
+<div class="block"><h3><code>random_next</code> and <code>self_test</code> <span class="lines">lines 168&ndash;200</span></h3>
+<dl><dt>What</dt><dd><code>random_next</code> is a small repeatable random number generator: it adds a fixed constant to its state and runs the result through <code>mix</code>. <code>self_test</code> (run with <code>--test</code>) runs <b>107 cases</b>:
+<ul>
+<li>6 hand-written cases: duplicates with the smallest and largest keys (0 and 4,294,967,295), no matches, empty left, empty right, both empty, and all rows matching all rows.</li>
+<li>1 case with 3 different keys that land in the same bucket. The loop picks keys where <code>mix(key) &amp; 7 == 0</code>. With the default rule, 3 rows get 8 buckets, so the filter is correct: they really do share bucket 0 of 8. (With the quarter rule there is 1 bucket and the filter does nothing, but the test still passes.)</li>
+<li>100 random cases: 32 left rows, 48 right rows, only 11 distinct key values, so there are many duplicates.</li>
+</ul></dd></dl></div>
+
+<h2>Making the benchmark data</h2>
+<div class="block"><h3><code>shuffle</code> and <code>generate</code> <span class="lines">lines 202&ndash;218</span></h3>
+<dl><dt>What</dt><dd><code>shuffle</code> puts rows in random order (a standard Fisher-Yates shuffle). <code>generate</code> fills two tables of <code>count</code> rows. Left keys are 0, 1, 2, &hellip; <code>count-1</code>. Right keys are 0, 2, 4, &hellip; <code>2*(count-1)</code>. Each <code>row_id</code> is the original position. Both tables are then shuffled with seed 42.</dd>
+<dt>Result</dt><dd>Every key is unique, and exactly the even keys below <code>count</code> match: <code>ceil(count / 2)</code> matches. For 1,000,000 rows that is 500,000. The right answer is known in advance, with no second join needed.</dd></dl></div>
+
+<h2>Setup helpers</h2>
+<div class="block"><h3><code>pin_cpu</code> <span class="lines">lines 220&ndash;250</span></h3>
+<dl><dt>Returns</dt><dd>The core number, or -1 on the Mac.</dd>
+<dt>What</dt><dd>macOS cannot pin a thread to a core. So on the Mac this asks for the highest quality-of-service class (<code>QOS_CLASS_USER_INTERACTIVE</code>), which makes the scheduler prefer the fast cores. On Linux it pins to the first allowed core.</dd></dl></div>
+
+<div class="block"><h3><code>parse_number</code> <span class="lines">lines 252&ndash;261</span></h3>
+<dl><dt>What</dt><dd>Reads a whole number from the command line. Rejects anything that is not a whole number or is outside the allowed range.</dd></dl></div>
+
+<h2><code>main</code></h2>
+<div class="block"><h3>The benchmark <span class="lines">lines 263&ndash;341</span></h3>
+<dl>
+<dt>Usage</dt><dd><code>hash_join --test</code> runs the self-test. <code>hash_join OUTPUT_DIRECTORY [REPEATS] [MAX_ROWS]</code> runs the benchmark. <code>REPEATS</code> defaults to 7 (allowed 1&ndash;100). <code>MAX_ROWS</code> defaults to 2,000,000 (allowed 10,000&ndash;5,000,000).</dd>
+<dt>Steps</dt><dd>
+<ol>
+<li>Creates the output directory with <code>mkdir</code>. This <b>fails if the directory already exists</b>, so old results are never overwritten.</li>
+<li>Asks for the fast cores. Opens <code>timings.csv</code> and <code>environment.txt</code>. The second records the compiler, record size, timer, seed (42), repeat count, and which bucket rule was compiled in.</li>
+<li>For each size in {10,000; 100,000; 500,000; 1,000,000; 2,000,000; 5,000,000}, stops once the size passes <code>MAX_ROWS</code>:
+  <ul>
+  <li>allocates and generates both tables;</li>
+  <li>computes the expected match count and checksum from the known data: left row <code>i</code> pairs with right row <code>i/2</code> for every even <code>i</code>;</li>
+  <li>runs <code>repeats + 1</code> times. <b>Run 0 is a warm-up and is not recorded.</b> Each run times <code>build</code> and <code>probe</code>, checks the matches and checksum against the expected values, and stops with "Generated-data result mismatch" if they differ;</li>
+  <li>writes one CSV row per recorded run, then frees the table and flushes the file;</li>
+  <li>prints <code>&lt;rows&gt; rows per input: verified &lt;matches&gt; matches; &lt;n&gt; recorded runs</code>.</li>
+  </ul></li>
+</ol></dd>
+<dt>Output</dt><dd><code>timings.csv</code> columns: <code>rows_left, rows_right, run, seed, matches, checksum, buckets, estimated_bytes, build_ms, probe_ms, total_ms</code>.
+<br><code>estimated_bytes</code> = <code>2 * count * 8</code> (the two tables) + <code>(count + bucket_count) * 8</code> (bucket array and chain links, 8 bytes each).</dd>
+</dl></div>
+
+<h2>Why the size matters</h2>
+<p>Both tables always have the same size, every key is unique, and half the right rows match. So the only thing that changes between sizes is how big the lookup structure is. Each probe reads a random bucket. While the structure fits in the processor's cache (the small, fast memory next to each core), most reads are fast. Once it is bigger, most reads go to main memory, which is slow.</p>
+<p>Example with the default rule at 1,000,000 rows: 2,097,152 buckets &times; 8 bytes = 16.8 MB, plus chain links 8.0 MB, plus left rows 8.0 MB, about 32.8 MB. The M5's largest cache (L2) is 16 MB. At 100,000 rows the same arithmetic gives 262,144 &times; 8 = 2.1 MB, plus 0.8 MB, plus 0.8 MB, about 3.7 MB, which fits.</p>
+
+<div class="box">
+<p><b>Checked.</b> I compiled this file and ran <code>--test</code> on 2026-11-23. It printed: <i>Passed 107 cases against the nested-loop reference, comparing every matching row pair.</i></p>
+</div>
+<footer>Line numbers refer to <code>m5-pro/src/hash_join.c</code>. Part of the code explainers for the radix hash join project.</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,58 @@
+/* Shared style for the code explainer pages. System fonts only, so the pages open from disk. */
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --surface-2: #eceff3; --line: #d9dee5;
+  --fg: #131820; --fg-2: #47505d; --muted: #6a7280;
+  --accent: #2a78d6; --accent-soft: #e3eefb; --warn: #b4540f; --warn-soft: #fdf0e4;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111317; --surface: #191c21; --surface-2: #23272e; --line: #30353d;
+    --fg: #eef0f3; --fg-2: #b8bfc9; --muted: #8b939e;
+    --accent: #6da7ec; --accent-soft: #1b2b42; --warn: #f0a068; --warn-soft: #34261a;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body {
+  margin: 0; padding: 24px 16px 64px; background: var(--bg); color: var(--fg);
+  font: 16px/1.6 var(--sans);
+}
+main { max-width: 860px; margin: 0 auto; }
+nav.top { font-size: 14px; margin-bottom: 20px; }
+nav.top a { color: var(--accent); text-decoration: none; }
+nav.top a:hover { text-decoration: underline; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 6px; }
+h1 code { font-size: 0.85em; }
+h2 { font-size: 21px; margin: 40px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 0 0 8px; }
+p { margin: 0 0 12px; }
+.sub { color: var(--fg-2); margin-bottom: 20px; }
+code, .mono { font-family: var(--mono); font-size: 0.88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.lines { font-family: var(--mono); font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 8px; white-space: nowrap; }
+.box { background: var(--accent-soft); border-left: 4px solid var(--accent); padding: 12px 16px; border-radius: 6px; margin: 16px 0; }
+.box.warn { background: var(--warn-soft); border-left-color: var(--warn); }
+.box p:last-child, .box ul:last-child { margin-bottom: 0; }
+.block { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 18px; margin: 12px 0; }
+.block dl { margin: 0; display: grid; grid-template-columns: 90px 1fr; gap: 4px 12px; }
+.block dt { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+.block dd { margin: 0; }
+.block ul, .block ol { margin: 4px 0 0; padding-left: 20px; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 15px; background: var(--surface); }
+th, td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+th { background: var(--surface-2); }
+ul, ol { padding-left: 22px; }
+li { margin-bottom: 4px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin: 16px 0; }
+.card { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; color: inherit; text-decoration: none; }
+.card:hover { border-color: var(--accent); }
+.card b { display: block; font-family: var(--mono); font-size: 15px; margin-bottom: 4px; }
+.card span { color: var(--fg-2); font-size: 14px; }
+footer { margin-top: 48px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 12px; }
+@media (max-width: 560px) {
+  .block dl { grid-template-columns: 1fr; }
+  .block dt { padding-top: 8px; }
+  h1 { font-size: 25px; }
+}

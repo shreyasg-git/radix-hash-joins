@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>parallel_join.c explained</title>
+<link rel="stylesheet" href="explainer.css">
+</head>
+<body>
+<main>
+<nav class="top"><a href="index.html">&larr; All explainers</a></nav>
+<h1><code>parallel_join.c</code></h1>
+<p class="sub">Experiment 5: the simple and radix joins on 1, 2 and 4 threads. File: <code>m5-pro/src/parallel_join.c</code>, 479 lines. It uses shared helpers from <code>m5-pro/include/common.h</code>.</p>
+
+<div class="box">
+<p><b>The short version.</b> A thread is one line of work that runs on its own core. This program runs both joins with several threads at once and asks: how much faster does the join get with 2 or 4 threads than with 1?</p>
+<ul>
+<li><b>Simple join:</b> all threads share <b>one</b> lookup table. In the build, each thread inserts its slice of the left table. In the probe, each thread looks up its slice of the right table.</li>
+<li><b>Radix join:</b> the threads split the partitioning work, then hand out whole partitions to each other. Each partition gets its own small table.</li>
+</ul>
+<p>After every phase all threads wait for each other at a <b>barrier</b>, so each phase has a clean time.</p>
+</div>
+
+<div class="box warn">
+<p><b>The M5 fix ("flaw 2", header lines 32&ndash;41).</b> The older version inserted rows into the shared table with a "compare-and-swap in release order", which made each core finish every earlier memory write before each insert. On the M5 that made the 1-thread build take 540 ms instead of 80 ms, so the simple join's speed-up with more threads looked better than it is. Now each insert is one atomic swap: <code>old = swap(head, i); next[i] = old</code>. That is safe because no thread reads the table until all threads have passed the barrier after the build. <code>--insert cas-release</code> brings back the old way to show the difference.</p>
+</div>
+
+<h2>Blocks</h2>
+
+<div class="block"><h3>Constants <span class="lines">lines 45&ndash;47</span></h3>
+<dl><dt>What</dt><dd><code>MAX_THREADS</code> = 16. <code>MAX_PASSES</code> = 3. <code>BATCH</code> = 16: when threads share out partitions, each takes 16 at a time from the shared counter.</dd></dl></div>
+
+<div class="block"><h3>The barrier <span class="lines">lines 49&ndash;80</span></h3>
+<dl>
+<dt>What</dt><dd>macOS has no built-in barrier, so this is a small one made from a lock and a signal. <code>barrier_wait</code> counts the threads that have arrived. The last one to arrive resets the count, bumps a <code>generation</code> number, and wakes everyone. The others sleep until the generation changes. <code>barrier_init</code> and <code>barrier_destroy</code> set it up and clean it up.</dd></dl></div>
+
+<div class="block"><h3><code>Side</code> and <code>Shared</code> <span class="lines">lines 82&ndash;113</span></h3>
+<dl><dt>What</dt><dd>
+<ul>
+<li><code>Side</code>: one table being partitioned. Its input, row count, two work buffers, two boundary arrays, and (after the last pass) pointers to the result.</li>
+<li><code>Shared</code>: everything all threads see. Thread count; simple or radix; bits, passes and the bits per pass; the two sides <code>r</code> (left) and <code>s</code> (right); <code>histogram</code> (one row of counts per thread, for pass 1); <code>scratch</code> (private boundary space per thread); <code>buckets</code> and <code>next</code> (the lookup arrays); <code>bucket_offset</code> (where each partition's buckets start, for the radix join); <code>task</code> (a shared counter used to hand out work); the barrier; <code>stamp[6]</code> (the time each phase ended); and one <code>JoinResult</code> per thread.</li>
+<li><code>Worker</code>: a pointer to the shared data and the thread's number.</li>
+<li><code>insert_cas_release</code>: the switch for the older insert method.</li>
+</ul></dd></dl></div>
+
+<div class="block"><h3>Two tiny helpers <span class="lines">lines 115&ndash;120</span></h3>
+<dl><dt>What</dt><dd><code>phase_end</code>: wait at the barrier, then thread 0 writes down the time. So a phase ends when the <i>slowest</i> thread finishes. <code>share_begin(rows, id, threads)</code> = <code>rows * id / threads</code>: it cuts a table into equal slices, one per thread.</dd></dl></div>
+
+<div class="block"><h3><code>partition_side</code> <span class="lines">lines 124&ndash;184</span></h3>
+<dl>
+<dt>Input</dt><dd>The shared data, one side (left or right), and the thread's number.</dd>
+<dt>What</dt><dd>
+<b>Pass 1</b> in three steps, with no locks:
+<ol>
+<li>Each thread counts the rows of its own slice per group, into its own row of <code>histogram</code>. Barrier.</li>
+<li>Each thread works out where in each group its rows should go: the total of all earlier groups, plus the counts of the threads before it. So no two threads ever write the same slot. Thread 0 also writes the group boundaries.</li>
+<li>Each thread copies its slice's rows to those slots. Barrier.</li>
+</ol>
+<b>Later passes:</b> whole groups are handed out. Each thread takes a group number from the shared counter (<code>__atomic_fetch_add</code>), splits that group alone with <code>radix_pass</code> into private boundary space, and copies the boundaries into the shared array. Barrier. Thread 0 then writes the final boundary and resets the counter. Barrier.
+<br>At the end thread 0 records which buffer holds the result.</dd></dl></div>
+
+<div class="block"><h3><code>worker</code> (the thread body) <span class="lines">lines 188&ndash;261</span></h3>
+<dl>
+<dt>What</dt><dd>
+Each thread asks for the fast cores, waits at a barrier, and thread 0 writes down the start time. Then:
+<p><b>Simple join</b></p>
+<ol>
+<li>Each thread clears its slice of the bucket array to <code>EMPTY</code>. Barrier.</li>
+<li>Each thread inserts its slice of the left table into the shared table (with the atomic swap, or with compare-and-swap if <code>--insert cas-release</code>). Phase 1 ends.</li>
+<li>Each thread probes its slice of the right table against the shared table, using <code>hash_probe</code>, into its own result. Phase 2 ends.</li>
+</ol>
+<p><b>Radix join</b></p>
+<ol>
+<li>Partition the left table (phase 1), then the right table (phase 2).</li>
+<li>Thread 0 lays out all the small tables in one array: it adds up <code>bucket_count_for(rows)</code> for each partition. This is counted as build time. Barrier.</li>
+<li><b>Build:</b> threads take batches of 16 partitions from the shared counter. Each builds a small table for its partitions using <code>hash_build</code> (<code>shift = bits</code>). Each partition's chain links sit at the same positions as its rows, so no two threads touch the same entries. Barrier. Thread 0 notes the time and resets the counter.</li>
+<li><b>Probe:</b> threads take batches again. Partition <code>p</code> of the right table is looked up in the small table of partition <code>p</code> of the left table. Phase 4 ends.</li>
+</ol>
+Each thread saves its own match count and checksum.</dd></dl></div>
+
+<div class="block"><h3>Setup shared by the test and benchmark <span class="lines">lines 265&ndash;341</span></h3>
+<dl><dt>What</dt><dd>
+<ul>
+<li><code>RunTimes</code>: up to 4 phase times (simple: build, probe; radix: partition R, partition S, build, probe), the total, and the combined result.</li>
+<li><code>context_init</code>: allocates every buffer once, sized for the biggest case, and writes them before any timing. The bucket array is sized as the larger of 4 &times; rows + 2<sup>max_bits</sup> + 2 (enough for all the small tables) and the simple table's size. <code>context_free</code> frees them.</li>
+<li><code>run_join</code>: sets up the shared data, starts the threads, waits for all of them to finish, turns the phase stamps into milliseconds, and <b>adds up</b> the threads' match counts and checksums. (Both are sums, so the order does not matter.) Returns <code>RunTimes</code>.</li>
+</ul></dd></dl></div>
+
+<div class="block"><h3>Correctness <span class="lines">lines 343&ndash;399</span></h3>
+<dl><dt>What</dt><dd>
+<code>nested_loop</code> is the slow reference join (counts and checksum). <code>self_test</code> makes 60 random inputs (up to 400 rows per side; the first has an empty left table and the second an empty right table; every 9th key is the largest value), and for each runs: 1 to 4 threads &times; 1 to 3 passes &times; every bit count from the lowest allowed up to 8. The simple join (0 bits) runs with both insert methods. That is 23 runs per thread count, 92 per input, 5,520 in all. Then 4 more runs on 4,000 generated rows with a known answer. Total <b>5,524 checks</b>. Each is compared with the reference.</dd></dl></div>
+
+<div class="block"><h3><code>main</code> <span class="lines">lines 403&ndash;479</span></h3>
+<dl>
+<dt>Usage</dt><dd><code>parallel_join --test</code>, or <code>parallel_join OUTPUT_DIRECTORY [--rows N] [--threads 1,2,4] [--bits B] [--passes P] [--repeats R] [--seed S] [--insert swap|cas-release]</code>.</dd>
+<dt>Defaults</dt><dd>16,000,000 rows per table, threads 1, 2 and 4, 14 bits, 1 pass, 15 repeats, seed 42.</dd>
+<dt>Steps</dt><dd>
+<ol>
+<li>Creates a new results folder and writes <code>environment.txt</code> (including which insert method is used).</li>
+<li>Makes the data once, and allocates all buffers once.</li>
+<li>Lists the combinations: each thread count &times; {simple, radix}. Runs <code>repeats + 1</code> rounds; each round runs every combination once in a new shuffled order. Round 0 is a warm-up.</li>
+<li>Checks every run's matches and checksum against the known answer and stops on a mismatch.</li>
+<li>Writes one CSV row per phase, plus one row named <code>total</code>.</li>
+</ol></dd>
+<dt>Output</dt><dd><code>timings.csv</code> columns: <code>rows_per_input, algorithm, threads, total_bits, passes, run, position, steal_ms, phase, ms</code>.</dd>
+</dl></div>
+
+<h2>Things I noticed</h2>
+<div class="box warn">
+<ul>
+<li><b>The radix build and probe are separate phases here</b> (all small tables are built, then all are probed). The header says so: each small table is read again from memory at the start of its probe, which costs a little compared with the 1-thread program in <code>radix_join.c</code>. So the radix times here are not directly comparable with experiment 4's.</li>
+<li>On macOS, threads cannot be pinned to cores. <code>pin_to_cpu</code> only sets the high quality-of-service class, so which core each thread lands on is up to the scheduler.</li>
+<li><code>steal_ms</code> is -1 on macOS, so that CSV column carries no information on the M5.</li>
+</ul>
+</div>
+
+<div class="box">
+<p><b>Checked.</b> I compiled this file and ran <code>--test</code> on 2026-11-23. It printed: <i>Passed 5524 parallel join checks against the nested-loop reference.</i></p>
+</div>
+<footer>Line numbers refer to <code>m5-pro/src/parallel_join.c</code>.</footer>
+</main>
+</body>
+</html>
