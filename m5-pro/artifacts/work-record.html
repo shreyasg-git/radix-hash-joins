@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Radix Join Work Record</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one reading column (~70ch) with full-width panels for tables; same look as the project's other two pages. */
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --surface-2: #eceff3; --line: #d9dee5;
+  --fg: #131820; --fg-2: #47505d; --muted: #6a7280;
+  --accent: #2a78d6;
+  --good-bg: #dff3ea; --good-fg: #11674a; --warn-bg: #fbeedd; --warn-fg: #8a4b0f;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111317; --surface: #191c21; --surface-2: #23272e; --line: #30353d;
+    --fg: #eef0f3; --fg-2: #b8bfc9; --muted: #8b939e;
+    --accent: #5b9cec;
+    --good-bg: #123a2c; --good-fg: #7fdcb4; --warn-bg: #3e2a12; --warn-fg: #f2bd7d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111317; --surface: #191c21; --surface-2: #23272e; --line: #30353d;
+  --fg: #eef0f3; --fg-2: #b8bfc9; --muted: #8b939e;
+  --accent: #5b9cec;
+  --good-bg: #123a2c; --good-fg: #7fdcb4; --warn-bg: #3e2a12; --warn-fg: #f2bd7d;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 30px; }
+.col { max-width: 70ch; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 2.9rem); font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 1.55rem; font-weight: 600; letter-spacing: -0.01em; }
+h3 { font-size: 1.08rem; font-weight: 600; }
+p { margin: 0; }
+section { scroll-margin-top: 16px; }
+.stack { display: grid; gap: 14px; }
+.eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 1.15rem; color: var(--fg-2); }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.simple { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; display: grid; gap: 8px; }
+.simple li { font-size: 1.02rem; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: grid; gap: 16px; min-width: 0; }
+.design { display: grid; grid-template-columns: 10rem 1fr; border-top: 1px solid var(--line); }
+.design > div { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--line); font-size: 0.95rem; min-width: 0; }
+.design > div:nth-child(odd) { font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding-top: 11px; }
+@media (max-width: 560px) { .design { grid-template-columns: 1fr; } .design > div:nth-child(odd) { border-bottom: 0; padding-bottom: 0; } }
+.result { background: var(--surface-2); border-radius: 8px; padding: 14px 16px; display: grid; gap: 8px; }
+.result .k { font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tablewrap { overflow-x: auto; min-width: 0; }
+.note { font-size: 0.85rem; color: var(--muted); }
+ul.clean, ol.clean { margin: 0; padding-left: 1.2rem; display: grid; gap: 8px; }
+.toc { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 4px 20px; margin: 0; padding: 0; list-style: none; counter-reset: toc; font-size: 0.95rem; }
+.toc li { counter-increment: toc; display: flex; gap: 8px; }
+.toc li::before { content: counter(toc); font-family: var(--mono); font-size: 0.8rem; color: var(--muted); min-width: 1.4rem; padding-top: 2px; }
+.words { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.word { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: var(--surface); display: grid; gap: 4px; align-content: start; }
+.word b { font-size: 0.98rem; }
+.word p { font-size: 0.92rem; color: var(--fg-2); }
+.tag { display: inline-block; font-size: 0.78rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.tag.good { background: var(--good-bg); color: var(--good-fg); }
+.tag.warn { background: var(--warn-bg); color: var(--warn-fg); }
+.when { font-family: var(--mono); font-size: 0.82rem; white-space: nowrap; color: var(--fg-2); }
+footer { font-size: 0.85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="stack col">
+    <div class="eyebrow">Radix hash join project · Apple M5 MacBook Pro · 22 and 23 November 2026</div>
+    <h1>Radix Join Work Record</h1>
+    <p class="lede">Everything we added on top of the repository on 22 and 23 November: every change, every result and every number, with the file that holds the evidence.</p>
+  </header>
+
+  <section class="simple col" aria-label="Short version">
+    <p><b>Short version.</b></p>
+    <ul class="clean">
+      <li>Before 22 November, the 5 experiments had run on 3 different computers, and experiments 4 and 5 were not in this repository at all.</li>
+      <li>We reran every experiment on one computer, the Apple M5 MacBook Pro, in the folder <code>m5-pro/</code>. No file outside that folder changed.</li>
+      <li>We found 2 mistakes in how the inherited programs measured time. We fixed both and kept the old way switchable, so the difference can be shown.</li>
+      <li>We added experiment 6 to answer the professor's question about the number of boxes in the hash table. For the simple join at 16,777,216 rows, the fastest was 4 boxes per row. The Week 2 rule (2 boxes per row) took 1.29 times as long, and Varun's rule (1 box per 4 rows) took 4.87 times as long.</li>
+      <li>We built a tuner that finds the radix join's best settings on any computer by timing it. On the M5 it took 2 minutes. The settings from the paper's formula took 1.38 to 1.60 times as long as the tuner's.</li>
+    </ul>
+  </section>
+
+  <nav class="stack" aria-label="Contents">
+    <h2>On this page</h2>
+    <ol class="toc">
+      <li><a href="#words">Words used on this page</a></li>
+      <li><a href="#before">Where the project stood before</a></li>
+      <li><a href="#changes">Every change, in order</a></li>
+      <li><a href="#mac">What had to change for the Mac</a></li>
+      <li><a href="#flaws">Two measuring mistakes we fixed</a></li>
+      <li><a href="#results">What experiments 1 to 5 measured</a></li>
+      <li><a href="#professor">Experiment 6: the professor's question</a></li>
+      <li><a href="#paper">Which of the paper's conclusions hold</a></li>
+      <li><a href="#tuner">The tuner</a></li>
+      <li><a href="#formula">The paper's formula against the tuner</a></li>
+      <li><a href="#tools">Checks and run times</a></li>
+      <li><a href="#limits">What we could not measure</a></li>
+      <li><a href="#where">Where everything is</a></li>
+      <li><a href="#tell">Facts to tell the professor</a></li>
+    </ol>
+  </nav>
+
+  <!-- ===================== Words ===================== -->
+  <section id="words" class="stack">
+    <div class="col stack"><h2>Words used on this page</h2>
+      <p>Each technical word below is used later with exactly this meaning.</p></div>
+    <div class="words">
+      <div class="word"><b>Join</b><p>Matching the rows of two tables that share a key, for example orders with customers. Our two tables are called R and S. A row is 8 bytes: a 4-byte key and a 4-byte row number.</p></div>
+      <div class="word"><b>Hash table and boxes</b><p>A row of numbered boxes. Each row of R is filed in one box, chosen from its key. To find the matches for a row of S, the join opens one box instead of searching all of R. The code and reports call a box a "bucket".</p></div>
+      <div class="word"><b>Chain</b><p>The list of rows that landed in the same box. A lookup checks every row in the chain.</p></div>
+      <div class="word"><b>Rows per box</b><p>Rows divided by boxes. ½ row per box means 2 boxes for every row. 4 rows per box means 1 box for every 4 rows.</p></div>
+      <div class="word"><b>Hash function</b><p>A fixed formula that turns a key into a box number. Ours is called <code>mix</code>. A good one spreads keys evenly over the boxes.</p></div>
+      <div class="word"><b>Cache</b><p>Small, fast memory inside the processor that keeps copies of recently used data. The M5 has 128 KB per fast core and 16 MB shared by its 4 fast cores. A read from the cache took 2.6 ns; a read from main memory took 34.3 ns (experiment 1).</p></div>
+      <div class="word"><b>Simple join</b><p>The Week 2 hash join: one big hash table on all of R, then a lookup for every row of S.</p></div>
+      <div class="word"><b>Radix join</b><p>The paper's join. It first cuts R and S into pieces using the last few bits of each key's hash number, so matching rows land in pieces with the same number. Then it joins piece 1 with piece 1, piece 2 with piece 2, and so on, each with a small hash table that fits in the cache.</p></div>
+      <div class="word"><b>Radix bits (B)</b><p>How many bits choose the piece. B bits give 2<sup>B</sup> pieces: 8 bits give 256 pieces, 12 bits give 4,096.</p></div>
+      <div class="word"><b>Pass</b><p>One read through a whole table to cut it. With 2 passes, 12 bits are cut as 6 + 6: first into 64 pieces, then each of those into 64 more.</p></div>
+      <div class="word"><b>Thread and speedup</b><p>A thread is one worker. The M5 has 4 fast (performance) cores and 6 slower (efficiency) cores. Speedup is the time with 1 thread divided by the time with N threads; perfect sharing over 4 threads gives 4.</p></div>
+      <div class="word"><b>Median and tie</b><p>The median is the middle value of the runs: half were faster, half slower. Every time on this page is a median. Two settings tie when the ranges from their fastest to their slowest run overlap.</p></div>
+      <div class="word"><b>ns and ms</b><p>A nanosecond (ns) is a billionth of a second; a millisecond (ms) is a thousandth. "ns per row" is the whole time divided by the rows in one table.</p></div>
+    </div>
+  </section>
+
+  <!-- ===================== Before ===================== -->
+  <section id="before" class="panel" aria-label="Before">
+    <div class="stack"><div class="eyebrow">Before 22 November</div>
+      <h2>Where the project stood before</h2>
+      <p>The repository's <code>main</code> branch held 3 of the 5 experiments. Each experiment had run on whichever computer was at hand.</p></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>#</th><th>Experiment</th><th>Where the code was</th><th>Computer that ran it</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Stride scan: does the gap between memory reads change the time?</td><td>this repository</td><td>AMD Ryzen 7 7840HS laptop, inside Windows' Linux layer (WSL2)</td></tr>
+        <tr><td>2</td><td>Simple hash join: how does it slow down as tables grow?</td><td>this repository</td><td>the same Ryzen laptop</td></tr>
+        <tr><td>3</td><td>Radix partitioning: how many pieces can one pass cut a table into before it slows down?</td><td>this repository</td><td>Apple M5 MacBook Pro</td></tr>
+        <tr><td>4</td><td>Simple against radix join: does cutting first make the join faster?</td><td>only in a separate folder, <code>radix-hash-joins-v2</code>, built on 11 November</td><td>a cloud server with 2 Intel Xeon processor cores</td></tr>
+        <tr><td>5</td><td>Threads: do the joins get faster with more cores?</td><td>the same separate folder</td><td>the same cloud server</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="clean">
+      <li>Times from different computers cannot be compared with each other, so the evidence could not be followed from experiment 1 to experiment 5.</li>
+      <li>On 22 November, Varun's commit <code>d28429e</code> changed the simple join from at least 2 boxes per row to about 1 box per 4 rows. The commit gives no reason. The saved experiment 2 results were made before that change.</li>
+      <li>No experiment had tested the number of boxes or how evenly the hash function spreads keys.</li>
+    </ul>
+  </section>
+
+  <!-- ===================== Changes ===================== -->
+  <section id="changes" class="stack">
+    <div class="col stack"><h2>Every change, in order</h2>
+      <p>All of it lives in <code>m5-pro/</code>. The original programs, results and reports in <code>src/</code>, <code>results/</code> and <code>reports/</code> are unchanged.</p></div>
+    <div class="panel"><div class="tablewrap"><table>
+      <thead><tr><th>When</th><th>What we did</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td class="when">22 Nov</td><td>Copied every program, analysis script and report script into <code>m5-pro/</code>, and made them run on macOS (next section).</td><td>One computer for every experiment.</td></tr>
+        <tr><td class="when">22 Nov</td><td>Ran experiments 1 to 5 on the M5 and built their reports in the same layout as the original reports.</td><td>Comparable numbers.</td></tr>
+        <tr><td class="when">22 Nov</td><td>Found 2 measuring mistakes in the programs from the separate folder (experiments 4 and 5).</td><td>Two numbers did not add up (section 5).</td></tr>
+        <tr><td class="when">23 Nov</td><td>Fixed both. Reran experiments 4 and 5 with the fix, then the old way right after, the same night. Kept the results from before the fix in <code>archive/2026-11-22-before-fixes/</code>.</td><td>Show the size of each mistake.</td></tr>
+        <tr><td class="when">23 Nov</td><td>Built and ran experiment 6: number of boxes and hash function.</td><td>The professor asked how the box count was chosen. It never was.</td></tr>
+        <tr><td class="when">23 Nov</td><td>Repeated experiment 5, 15 minutes after the official run.</td><td>Measure how much a whole run shifts.</td></tr>
+        <tr><td class="when">23 Nov</td><td>Wrote the final analysis, report 07.</td><td>Mark which of the paper's conclusions still hold.</td></tr>
+        <tr><td class="when">23 Nov</td><td>Built the live lab, <code>scripts/live.sh</code>. It asks for settings, runs the same C program and builds the same PDF, without touching the official results.</td><td>Change settings during a meeting with the professor.</td></tr>
+        <tr><td class="when">23 Nov</td><td>Wrote 2 explainer web pages: How We Test Joins and Hash Bucket Lab.</td><td>Explain the experiment design and the box question.</td></tr>
+        <tr><td class="when">23 Nov</td><td>Built the tuner, <code>m5-pro/tuner/</code>.</td><td>Find the best settings by timing, without knowing the cache sizes.</td></tr>
+        <tr><td class="when">23 Nov</td><td>Raced the paper's formula against the tuner.</td><td>Measure how far the formula's settings are from the best.</td></tr>
+        <tr><td class="when">23 Nov</td><td>Saved everything to GitHub: pull request #2 (the rerun) and #3 (the tuner), both merged into <code>main</code>. The web pages moved to <code>m5-pro/artifacts/</code> on branch <code>m5-pro-artifacts</code>.</td><td>Everything committed under your name.</td></tr>
+      </tbody>
+    </table></div></div>
+  </section>
+
+  <!-- ===================== Mac ===================== -->
+  <section id="mac" class="stack">
+    <div class="col stack"><h2>What had to change for the Mac</h2>
+      <p>The programs were written for Linux on Intel and AMD processors. These are the changes needed to run them on the M5, and why.</p></div>
+    <div class="panel"><div class="tablewrap"><table>
+      <thead><tr><th>Change</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Experiment 1 empties the cache by reading a separate 512 MB block of memory first.</td><td>The Ryzen version used a processor instruction that removes data from the cache. Its Apple counterpart ran but changed nothing: random reads took 2.6 ns before it and 2.6 ns after. After reading the 512 MB block, they took 34.3 ns.</td></tr>
+        <tr><td>Memory block size 128 bytes in reports and charts.</td><td>The M5 moves memory between cache and main memory in 128-byte blocks; the Ryzen uses 64-byte blocks.</td></tr>
+        <tr><td>Memory page size 16 KB in captions.</td><td>macOS hands out memory in 16 KB pages, not 4 KB.</td></tr>
+        <tr><td>Threads ask for the highest priority class.</td><td>macOS does not let a program keep a thread on one core. It runs the highest priority class on the fast cores.</td></tr>
+        <tr><td>The cost of one clock read is the average of 1,000,000 reads: about 9 ns.</td><td>The old program used the middle value of 2,001 back-to-back pairs. The M5's clock moves in steps of 41.7 ns, so almost every pair showed 0 and the result was 0 ns.</td></tr>
+        <tr><td>Experiment 5 uses 12 bits in 1 pass, the fastest setting at 16,000,000 rows in experiment 4 on the M5.</td><td>The old program fixed it at 14 bits, chosen on the cloud server.</td></tr>
+        <tr><td>Experiment 5 runs 1, 2, 4 and 8 threads.</td><td>1, 2 and 4 are what the assignment asks for. 8 shows what happens when 4 of the threads land on the slower cores.</td></tr>
+        <tr><td>New report scripts for experiments 1 and 2.</td><td>The scripts that made the original two PDFs are not in the repository. The new ones copy the original layout, fonts and charts, and every sentence that quotes a number is computed from the data.</td></tr>
+      </tbody>
+    </table></div>
+    <div class="stack"><h3>Fixes to the report scripts</h3>
+      <ul class="clean">
+        <li>The partitioning report called a one-time spike at 1 bit "cost rises from 1 bit". Now a rise counts only if every larger number of bits also stays more than 30% above the flat level, the middle value of 2 to 8 bits.</li>
+        <li>The join report's cost model read only experiment 3 rows labelled with 4 KB pages. On the Mac the label is "default", so it silently used none of them. It now reads both labels.</li>
+        <li>The clock-read share of each run is computed from the data. Before, the report printed "under 1%" as fixed text.</li>
+        <li>The "Interference" line no longer describes cloud-server effects, which a laptop does not have. The final report quotes thread speedup at 4 threads, one per fast core.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== Flaws ===================== -->
+  <section id="flaws" class="stack">
+    <div class="col stack"><h2>Two measuring mistakes we fixed</h2>
+      <p>Both were in the programs for experiments 4 and 5, from the separate folder. The separate folder itself is unchanged. The old behaviour of each can still be switched on, so the difference can be shown live. <code>m5-pro/DESIGN-FLAWS.md</code> has the full explanation.</p></div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Mistake 1 · experiment 4</div>
+        <h3>The radix join read the clock inside its own timing</h3></div>
+      <div class="design">
+        <div>What it did</div><div>To report build time and lookup time separately, the program read the clock twice per piece, inside the timed join. With 14 bits there are 16,384 pieces, so 32,768 clock reads. At about 9 ns each that is about 0.3 ms, in a join that takes about 1.4 ms at 100,000 rows.</div>
+        <div>Effect</div><div>Settings with many pieces looked slower than they were. That pushes the choice of bits down, and choosing the bits is the point of experiment 4.</div>
+        <div>How we found it</div><div>The old report said the clock reads cost "under 1%". That was fixed text, not a measurement. With 9 ns per read, the share at 14 bits and 100,000 rows comes to 18% on paper.</div>
+        <div>Fix</div><div>The join is timed once, with no clock reads inside. Build time comes from a separate build-only pass after each run. The old way: <code>--timing per-partition</code>.</div>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Rows per table</th><th class="num">Bits</th><th class="num">Pieces</th><th class="num">Old way (ms)</th><th class="num">Fixed (ms)</th><th class="num">Old way added</th></tr></thead>
+        <tbody>
+          <tr><td class="num">100,000</td><td class="num">8</td><td class="num">256</td><td class="num">1.145</td><td class="num">1.133</td><td class="num">1.0%</td></tr>
+          <tr><td class="num">100,000</td><td class="num">12</td><td class="num">4,096</td><td class="num">1.234</td><td class="num">1.194</td><td class="num">3.3%</td></tr>
+          <tr><td class="num">100,000</td><td class="num">14</td><td class="num">16,384</td><td class="num">1.525</td><td class="num">1.382</td><td class="num">10.4%</td></tr>
+          <tr><td class="num">1,000,000</td><td class="num">12</td><td class="num">4,096</td><td class="num">12.360</td><td class="num">12.182</td><td class="num">1.5%</td></tr>
+          <tr><td class="num">1,000,000</td><td class="num">16</td><td class="num">65,536</td><td class="num">14.169</td><td class="num">13.724</td><td class="num">3.2%</td></tr>
+        </tbody>
+      </table></div>
+      <div class="result"><span class="k">What changed in the conclusions</span>
+        <p>The best number of bits stayed the same at 4 of 7 sizes. At the other 3 it moved by 2 bits (100,000 rows: 6 to 8; 1,000,000: 10 to 12; 2,000,000: 12 to 10), and at each of those the old pick was within 2% of the new one, a tie. The radix join beat the simple join in every run from 1,000,000 rows up, before and after the fix.</p></div>
+    </div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Mistake 2 · experiment 5</div>
+        <h3>The threaded simple join waited after every insert</h3></div>
+      <div class="design">
+        <div>What it did</div><div>When several threads add rows to one shared hash table, each insert must be all-or-nothing, or a row is lost when two threads hit the same box at once. The program also told every insert to wait until all earlier memory writes of its core had finished. Each insert writes to a random place in a 128 MB array, a slow trip to main memory, so each insert waited for the previous slow trip. A core can normally keep dozens of such trips going at once.</div>
+        <div>Why the wait was not needed</div><div>No thread reads the table until every thread has finished the build, and that finishing point already makes every write visible to all threads.</div>
+        <div>How we found it</div><div>With 1 thread, building the table took 568 ms in experiment 5, while the plain build in experiment 4 took 75 ms for the same 16,000,000 rows. We then timed 4 ways of inserting with 1 thread (table below).</div>
+        <div>Fix</div><div>Each insert is one all-or-nothing swap with no waiting. A checking tool (ThreadSanitizer) ran all 5,524 test cases and found no two threads touching the same memory unsafely. The old way: <code>--insert cas-release</code>.</div>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Insert method, 16,000,000 rows, 1 thread</th><th class="num">Build time</th></tr></thead>
+        <tbody>
+          <tr><td>plain write, not all-or-nothing (safe only with 1 thread)</td><td class="num">76 ms</td></tr>
+          <tr><td>all-or-nothing, waiting for earlier writes (the old program)</td><td class="num">538 to 568 ms</td></tr>
+          <tr><td>all-or-nothing compare, no waiting</td><td class="num">99 to 113 ms</td></tr>
+          <tr><td>all-or-nothing swap, no waiting (the fix)</td><td class="num">80 to 88 ms</td></tr>
+        </tbody>
+      </table></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Threads</th><th class="num">Build, old (ms)</th><th class="num">Build, fixed (ms)</th><th class="num">Total, old (ms)</th><th class="num">Total, fixed (ms)</th><th class="num">Speedup, old</th><th class="num">Speedup, fixed</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td class="num">526</td><td class="num">78</td><td class="num">927</td><td class="num">501</td><td class="num">1.00×</td><td class="num">1.00×</td></tr>
+          <tr><td class="num">2</td><td class="num">291</td><td class="num">46</td><td class="num">497</td><td class="num">259</td><td class="num">1.87×</td><td class="num">1.93×</td></tr>
+          <tr><td class="num">4</td><td class="num">150</td><td class="num">36</td><td class="num">262</td><td class="num">167</td><td class="num">3.55×</td><td class="num">3.00×</td></tr>
+          <tr><td class="num">8</td><td class="num">56</td><td class="num">33</td><td class="num">142</td><td class="num">129</td><td class="num">6.51×</td><td class="num">3.89×</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">Simple join, 16,000,000 rows, old and fixed way run the same night one after the other, median of 15 runs each.</p>
+      <div class="result"><span class="k">What changed in the conclusions</span>
+        <p>The 1-thread build went from 526 ms to 78 ms. The simple join's speedup with 8 threads dropped from 6.51× to 3.89×: the old number mostly measured how much the waiting slowed down 1 thread. The radix join's lead over the simple join with 4 threads shrank from 4.0 times to 2.3 times. The radix join's code did not change.</p></div>
+    </div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Two more facts about measuring</div></div>
+      <div class="design">
+        <div>Whole runs shift</div><div>A repeat of experiment 5, 15 minutes after the official run, was 5% to 18% faster for both joins at every thread count. The ratio moved much less: the radix join over the simple join with 4 threads was 2.3 in the official run and 2.35 in the repeat. So we compare times within one run, and ratios across runs. Folder: <code>results/05-parallel-join-repeat</code>.</div>
+        <div>Kept on purpose</div><div>The Week 2 program (experiment 2) requests the hash table's memory inside the build timer, so the operating system's setup of each 16 KB page is counted as build time. More boxes means more pages. We kept it because report 2 reproduces the Week 2 report. Experiments 3 to 6 set up all memory before any timer starts.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== Results 1-5 ===================== -->
+  <section id="results" class="stack">
+    <div class="col stack"><h2>What experiments 1 to 5 measured</h2>
+      <p>All on the M5, after both fixes. Every run checks its answer against the known number of matches. Each round runs every setting once in a new random order, so a slow moment of the laptop lands on different settings each round.</p></div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Experiment 1 · stride scan</div><h3>Does the gap between memory reads change the time?</h3></div>
+      <div class="design">
+        <div>Setup</div><div>200,000 single-byte reads per scan. The gap between reads goes from 1 to 1,024 bytes (11 values). 3 warm-up rounds, then 30 recorded runs of each.</div>
+      </div>
+      <div class="result"><span class="k">Result</span>
+        <p>After emptying the cache, a gap of 256 bytes took 20 times as long as a gap of 1 byte for the same number of reads: 4.96 against 0.24 ns per read. At a gap of 1, one 128-byte memory block serves 128 reads; from a gap of 128, every read needs its own block from main memory.</p></div>
+    </div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Experiment 2 · simple hash join</div><h3>How does a plain hash join slow down as tables grow?</h3></div>
+      <div class="design">
+        <div>Setup</div><div>10,000 to 2,000,000 rows per table (5 sizes). R's keys are 0 to N−1; S's keys are 0, 2, 4, …, so half of S finds a match. 1 warm-up, then 7 recorded runs. Run with both box rules: Week 2 (2 boxes per row) and Varun's (1 box per 4 rows).</div>
+      </div>
+      <div class="result"><span class="k">Result</span>
+        <p>Time per row grew from 4 ns at 10,000 rows to 27 ns at 2,000,000 rows, for the same work per row. Varun's rule took 1.65 to 2.52 times as long as the Week 2 rule at every size: 136.4 against 54.0 ms at 2,000,000 rows.</p></div>
+    </div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Experiment 3 · radix partitioning</div><h3>How many pieces can one pass cut a table into before it slows down?</h3></div>
+      <div class="design">
+        <div>Setup</div><div>16,777,216 rows of 8 bytes (128 MB). 0 to 20 bits (1 to 1,048,576 pieces), in 1, 2 or 3 passes. 1 warm-up, then 15 recorded runs of each.</div>
+      </div>
+      <div class="result"><span class="k">Result</span>
+        <p>One pass cost about 1.7 ns per row (the middle value of 2 to 8 bits). From 16 bits (65,536 pieces), every value stayed more than 30% above that, reaching 5.6 ns at 20 bits. Two passes beat one pass only from 18 bits (262,144 pieces). The paper's limit, set by 1999 hardware, was about 6 bits (64 pieces) per pass.</p></div>
+    </div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Experiment 4 · simple against radix join</div><h3>Does cutting the tables into pieces first make the join faster?</h3></div>
+      <div class="design">
+        <div>Setup</div><div>100,000 to 32,000,000 rows per table (7 sizes). Radix bits 2 to 18 in 1 or 2 passes, and the simple join at every size. 1 warm-up, then 15 recorded runs. Then 3 sizes again with 2 other shuffles of the data (seeds 7 and 2026), 7 runs each.</div>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Rows per table</th><th class="num">Simple (ms)</th><th class="num">Best radix (ms)</th><th class="num">Best setting</th><th class="num">Radix speed</th><th>Every radix run faster?</th></tr></thead>
+        <tbody>
+          <tr><td class="num">100,000</td><td class="num">1.1</td><td class="num">1.1</td><td class="num">8 bits, 1 pass</td><td class="num">0.98×</td><td>no</td></tr>
+          <tr><td class="num">1,000,000</td><td class="num">18.3</td><td class="num">12.2</td><td class="num">12 bits, 1 pass</td><td class="num">1.50×</td><td>yes</td></tr>
+          <tr><td class="num">2,000,000</td><td class="num">46.9</td><td class="num">24.8</td><td class="num">10 bits, 1 pass</td><td class="num">1.89×</td><td>no</td></tr>
+          <tr><td class="num">4,000,000</td><td class="num">110.6</td><td class="num">51.4</td><td class="num">10 bits, 1 pass</td><td class="num">2.15×</td><td>no</td></tr>
+          <tr><td class="num">8,000,000</td><td class="num">232.0</td><td class="num">102.9</td><td class="num">12 bits, 1 pass</td><td class="num">2.25×</td><td>yes</td></tr>
+          <tr><td class="num">16,000,000</td><td class="num">516.4</td><td class="num">207.1</td><td class="num">12 bits, 1 pass</td><td class="num">2.49×</td><td>yes</td></tr>
+          <tr><td class="num">32,000,000</td><td class="num">1,118.0</td><td class="num">456.5</td><td class="num">12 bits, 1 pass</td><td class="num">2.45×</td><td>yes</td></tr>
+        </tbody>
+      </table></div>
+      <div class="result"><span class="k">Result</span>
+        <p>At 32,000,000 rows the radix join was 2.45 times as fast as the simple join (456 against 1,118 ms). At 100,000 rows, where both fit in the cache, the ratio was 0.98. The simple join's time per row grew from 11 ns to 35 ns over the 7 sizes; the radix join's stayed between 11 and 14 ns. The best setting used 1 pass at every size, with 8 to 12 bits. With the other 2 shuffles of the data, the radix join was 1.71 to 2.24 times as fast at the same sizes.</p>
+        <p>A cost model fitted to these same runs picked a setting that tied with the fastest at 7 of 7 sizes; its worst pick was 3% slower. Because it was fitted to the same runs, this shows the model describes the data, not that it can predict a new computer.</p></div>
+    </div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Experiment 5 · threads</div><h3>Do the joins get faster with more processor cores?</h3></div>
+      <div class="design">
+        <div>Setup</div><div>16,000,000 rows per table. Radix join with 12 bits in 1 pass. 1, 2, 4 and 8 threads. 1 warm-up, then 15 recorded runs.</div>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Threads</th><th class="num">Simple (ms)</th><th class="num">Speedup</th><th class="num">Radix (ms)</th><th class="num">Speedup</th><th class="num">Radix ahead by</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td class="num">500.7</td><td class="num">1.00×</td><td class="num">247.9</td><td class="num">1.00×</td><td class="num">2.0×</td></tr>
+          <tr><td class="num">2</td><td class="num">259.0</td><td class="num">1.93×</td><td class="num">127.7</td><td class="num">1.94×</td><td class="num">2.0×</td></tr>
+          <tr><td class="num">4</td><td class="num">166.6</td><td class="num">3.00×</td><td class="num">73.2</td><td class="num">3.39×</td><td class="num">2.3×</td></tr>
+          <tr><td class="num">8</td><td class="num">128.6</td><td class="num">3.89×</td><td class="num">47.5</td><td class="num">5.22×</td><td class="num">2.7×</td></tr>
+        </tbody>
+      </table></div>
+      <div class="result"><span class="k">Result</span>
+        <p>With 4 threads, one per fast core, the radix join ran 3.39 times as fast as with 1 thread, and the simple join 3.00 times. The radix join finished first at every thread count: 73 against 167 ms with 4 threads.</p></div>
+    </div>
+  </section>
+
+  <!-- ===================== Professor / Exp 6 ===================== -->
+  <section id="professor" class="stack">
+    <div class="col stack"><h2>Experiment 6: the professor's question</h2>
+      <p>The professor asked how the number of boxes was chosen and whether anyone checked how evenly the hash function spreads the keys. Nobody had: Week 2 used 2 boxes per row, and Varun's commit changed it to 1 box per 4 rows, both without a measurement.</p></div>
+
+    <div class="panel">
+      <div class="design">
+        <div>Setup</div><div>Rows per box: 1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8. Sizes: 65,536, 524,288, 4,194,304 and 16,777,216 rows per table. Both joins; the radix join gives every piece its own small table with the same rule. 1 warm-up, then 7 recorded runs. All memory set up before any timer starts.</div>
+        <div>Second run</div><div>5 hash functions on 3 kinds of keys, at 1,048,576 rows and ½ row per box.</div>
+        <div>Evidence</div><div><code>reports/06-bucket-sweep.pdf</code>, <code>results/06-bucket-sweep/</code>, <code>results/06-hash-functions/</code></div>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Rows per table</th><th>Join</th><th class="num">Fastest rows per box</th><th>Tied with it</th><th class="num">Week 2 rule took</th><th class="num">Varun's rule took</th></tr></thead>
+        <tbody>
+          <tr><td class="num">65,536</td><td>simple</td><td class="num">1/8</td><td>1/16, 1/4</td><td class="num">1.39×</td><td class="num">2.44×</td></tr>
+          <tr><td class="num">65,536</td><td>radix</td><td class="num">1/8</td><td>1/16, 1/4, 1/2</td><td class="num">1.16×</td><td class="num">1.75×</td></tr>
+          <tr><td class="num">524,288</td><td>simple</td><td class="num">1/4</td><td>1/8</td><td class="num">1.14×</td><td class="num">2.30×</td></tr>
+          <tr><td class="num">524,288</td><td>radix</td><td class="num">1/4</td><td>1/16, 1/8</td><td class="num">1.12×</td><td class="num">1.74×</td></tr>
+          <tr><td class="num">4,194,304</td><td>simple</td><td class="num">1/16</td><td>1/8, 1/4, 1/2</td><td class="num">1.40×</td><td class="num">4.18×</td></tr>
+          <tr><td class="num">4,194,304</td><td>radix</td><td class="num">1/8</td><td>1/16, 1/4, 1/2</td><td class="num">1.10×</td><td class="num">1.73×</td></tr>
+          <tr><td class="num">16,777,216</td><td>simple</td><td class="num">1/4</td><td>1/16, 1/8, 1/2</td><td class="num">1.29×</td><td class="num">4.87×</td></tr>
+          <tr><td class="num">16,777,216</td><td>radix</td><td class="num">1/4</td><td>1/16, 1/8, 1/2, 1, 2, 4</td><td class="num">1.10×</td><td class="num">1.71×</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">"Took" = that rule's time divided by the fastest setting's time at the same size. Week 2 rule = ½ row per box; Varun's rule = 4 rows per box.</p>
+      <div class="result"><span class="k">Number of boxes: result</span>
+        <ul class="clean">
+          <li>The fewest boxes that tied with the fastest setting at every size was ¼ row per box (4 boxes per row), for both joins.</li>
+          <li>Why a best value exists: at 16,777,216 rows the simple join spent 306 ms building with 1/16 row per box against 16 ms with 8, because every box is emptied before the rows go in. Lookups went the other way: 265 ms against 7,887 ms, because a lookup walks a chain and each row in it is one more wait for memory.</li>
+          <li>Memory for the boxes, simple join at 16,777,216 rows: 256 MB at ¼ row per box, 128 MB with the Week 2 rule, 16 MB with Varun's rule. Varun's rule uses the least memory and took 4.87 times as long.</li>
+          <li>The radix join cared less: Varun's rule took 1.71 times as long, because each piece's small table sits in the cache, where walking a longer chain is cheap.</li>
+          <li>For the radix join at 16,777,216 rows, 1/8 and ¼ row per box were 0.5% apart (195.2 and 194.2 ms). 1/16 took 211.9 ms, 9.1% longer than ¼.</li>
+        </ul></div>
+      <div class="result"><span class="k">Hash function: result</span>
+        <ul class="clean">
+          <li>Over every size and setting, <code>mix</code> left a share of empty boxes within 0.06 percentage points of what a perfectly random hash function leaves. So <code>mix</code> spreads our keys evenly, and the chain lengths are what chance gives.</li>
+          <li>On keys 0, 1, 2, …, the cheapest function (use the key itself as the box number) made the simple join 2.68 times as fast as <code>mix</code>: 8.7 against 23.4 ms.</li>
+          <li>On keys that are multiples of 64, the same cheap function used only 1 box in 64, and the simple join took 205.8 ms against 23.5 ms with <code>mix</code>: 8.77 times as long.</li>
+          <li>In the simple join, <code>mix</code> was never the fastest of the 5 functions on any of the 3 kinds of keys, and never more than 2.7 times as slow as the fastest.</li>
+        </ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== Paper ===================== -->
+  <section id="paper" class="stack">
+    <div class="col stack"><h2>Which of the paper's conclusions hold</h2>
+      <p>The paper is Boncz, Manegold and Kersten, VLDB 1999. Its claim: on modern computers a join is slowed by waiting for memory, not by arithmetic, so it should be organized around the cache. This table is from report 07.</p></div>
+    <div class="panel"><div class="tablewrap"><table>
+      <thead><tr><th>The paper's conclusion</th><th>Our number on the M5</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr><td>Memory access, not arithmetic, sets the time when data does not fit in the cache.</td><td>Experiment 1: the same reads took 20 times as long with a 256-byte gap as with a 1-byte gap.</td><td><span class="tag good">Still visible</span></td></tr>
+        <tr><td>A hash join gets slower per row once its table outgrows the cache.</td><td>Experiment 2: 4 ns per row at 10,000 rows, 27 ns at 2,000,000 rows.</td><td><span class="tag good">Still visible</span></td></tr>
+        <tr><td>Cutting into cache-sized pieces makes the join faster, despite the extra cutting.</td><td>Experiment 4: 2.45 times as fast at 32,000,000 rows (12 bits); 0.98 at 100,000 rows.</td><td><span class="tag good">Still visible</span></td></tr>
+        <tr><td>One pass gets slow when it cuts into too many pieces.</td><td>Experiment 3: flat level 1.7 ns per row; from 16 bits (65,536 pieces) every value more than 30% above it; 5.6 ns at 20 bits.</td><td><span class="tag good">Still visible</span></td></tr>
+        <tr><td>Several passes beat one pass for many pieces.</td><td>Experiment 3: 2 passes win only from 18 bits (262,144 pieces). Experiment 4: the best setting used 1 pass at every size.</td><td><span class="tag warn">Much weaker</span></td></tr>
+        <tr><td>A formula built from cache sizes can choose good settings.</td><td>Experiment 4: a model fitted to our runs tied with the fastest at 7 of 7 sizes. The paper's own formula, not fitted to any runs, picked settings that took 1.38 to 1.60 times as long as the tuner's (section 10).</td><td><span class="tag warn">Approximately</span></td></tr>
+        <tr><td>(Assignment extension) Cut-first joins share work well across cores.</td><td>Experiment 5: with 4 threads the radix join ran 3.39 times as fast as with 1, the simple join 3.00 times.</td><td><span class="tag good">Still visible</span></td></tr>
+      </tbody>
+    </table></div></div>
+    <div class="col stack">
+      <h3>Why some conclusions are weaker on the M5</h3>
+      <ul class="clean">
+        <li><b>Passes.</b> In 1999 the processor's list of recently used memory-page addresses held 64 entries or fewer, so one pass could write to about 64 pieces. On the M5, one pass stayed within 30% of its flat level up to 15 bits (32,768 pieces).</li>
+        <li><b>Cache size.</b> The M5's second cache is 16 MB, so pieces can be much larger than the paper's.</li>
+        <li><b>Waiting for memory in parallel.</b> A modern core keeps many memory reads going at once. That shrinks the simple join's penalty, which limits the radix join's lead to 2.49 times in our runs.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== Tuner ===================== -->
+  <section id="tuner" class="stack">
+    <div class="col stack"><h2>The tuner</h2>
+      <p>A separate program in <code>m5-pro/tuner/</code> that uses no file outside that folder. It finds the radix join's best settings on whatever computer runs it, by timing the join. It never reads the cache sizes; the timings already contain their effect.</p></div>
+    <div class="panel">
+      <div class="design">
+        <div>What it changes</div><div>3 settings. Radix bits: 0 to 18. Passes: 1, 2 or 3. Rows per box: 1/8, 1/4, 1/2, 1, 2, 4.</div>
+        <div>What it measures</div><div>Nanoseconds per row for one whole join, cutting included. Lower is better. Every run's answer is checked; a wrong answer stops the tuner.</div>
+        <div>What is frozen</div><div>The join code, the data, <code>mix</code>, 1 thread, the timing rules, the search steps and the sizes are written down in <code>tuner/SPEC.md</code> as version 1. Changing any of them means a version 2, and results of different versions are never compared; the report program refuses to.</div>
+        <div>How it searches</div><div>Stage A times every bits-and-passes pair at ½ row per box, 3 rounds. Stage B takes the best 4 pairs with all 6 rows-per-box values, 3 rounds. Stage C races the best 5 plus up to 2 reference settings (no cutting, and stage A's winner), 11 rounds. It does this at 1,048,576, 4,194,304 and 16,777,216 rows.</div>
+        <div>The rule it learns</div><div>From the 3 winners, it learns how many rows one piece should hold. Then it checks that rule at 8,388,608 rows, a size it did not learn from.</div>
+        <div>Commands</div><div><code>./tune.sh</code> for a real run; <code>./tune.sh --quick</code> checks that everything works in about 2 seconds.</div>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Rows per table</th><th class="num">Fastest setting</th><th class="num">ns per row</th><th class="num">Against no cutting</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1,048,576</td><td class="num">11 bits, 1 pass, 1/8 row per box</td><td class="num">9.92</td><td class="num">1.72× as fast</td></tr>
+          <tr><td class="num">4,194,304</td><td class="num">12 bits, 1 pass, 1/8 row per box</td><td class="num">10.27</td><td class="num">2.58× as fast</td></tr>
+          <tr><td class="num">16,777,216</td><td class="num">10 bits, 1 pass, 1/8 row per box</td><td class="num">11.00</td><td class="num">2.68× as fast</td></tr>
+        </tbody>
+      </table></div>
+      <div class="result"><span class="k">Result on the M5 (run of 23 November, 2 minutes 0 seconds)</span>
+        <ul class="clean">
+          <li>The bottom of the curve is flat. At 16,777,216 rows, every value from 9 to 12 bits came within 5% of the lowest point (8 to 13 bits at 1,048,576 rows; 9 to 13 at 4,194,304).</li>
+          <li>Rows per box mattered more than bits. 1/8 row per box made the join 1.19, 1.19 and 1.14 times as fast as ½ row per box at the 3 sizes.</li>
+          <li>The learned rule: about 2,048 rows of R per piece (about 16 KB of rows plus a 72 KB table), 1 pass, 1/8 row per box.</li>
+          <li>The check at 8,388,608 rows: the rule chose 12 bits, the fastest was 11 bits, and the rule's choice took 1.002 times as long: a tie.</li>
+          <li>Time: 4 s at 1,048,576 rows, 21 s at 4,194,304, 1 min 30 s at 16,777,216, 5 s for the check. The PDF report takes under 1 second.</li>
+        </ul></div>
+      <div class="stack"><h3>Two limits of the tuner</h3>
+        <ul class="clean">
+          <li>1/8 row per box is the smallest value version 1 tries, and it won at every size. Testing smaller values needs version 2. Experiment 6, with a different setup (12 bits), measured 1/16 at 16,777,216 rows: 9.1% slower than ¼ for the radix join.</li>
+          <li>It has run only on this Mac. Its Linux code, which keeps the thread on one core, has never been compiled or run.</li>
+        </ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== Formula ===================== -->
+  <section id="formula" class="stack">
+    <div class="col stack"><h2>The paper's formula against the tuner</h2>
+      <p>The paper chooses settings from the computer's numbers instead of timing them. We wrote its rules down, computed what they choose on the M5, and timed those choices against the tuner's in one run: each setting 11 times in a shuffled order, 39 seconds in total.</p></div>
+    <div class="panel">
+      <div class="design">
+        <div>Bits rule</div><div>Cut until one piece of R plus its hash table fits in the fastest cache, 128 KB on the M5.</div>
+        <div>Passes rule</div><div>At most 6 bits (64 pieces) per pass. 64 is the limit of the paper's 1999 computer. macOS does not report the M5's number, so we used the paper's.</div>
+        <div>Rows per box</div><div>The paper gives no rule. Our experiments used ½, so the formula got ½.</div>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Rows per table</th><th class="num">The formula picks</th><th class="num">The tuner picks</th><th class="num">The formula's time</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1,048,576</td><td class="num">8 bits, 2 passes, ½</td><td class="num">11 bits, 1 pass, 1/8</td><td class="num">1.60× as long</td></tr>
+          <tr><td class="num">4,194,304</td><td class="num">10 bits, 2 passes, ½</td><td class="num">12 bits, 1 pass, 1/8</td><td class="num">1.52× as long</td></tr>
+          <tr><td class="num">8,388,608</td><td class="num">11 bits, 2 passes, ½</td><td class="num">12 bits, 1 pass, 1/8</td><td class="num">1.43× as long</td></tr>
+          <tr><td class="num">16,777,216</td><td class="num">12 bits, 2 passes, ½</td><td class="num">10 bits, 1 pass, 1/8</td><td class="num">1.38× as long</td></tr>
+        </tbody>
+      </table></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Where the gap comes from (one change at a time)</th><th class="num">1M rows</th><th class="num">4M</th><th class="num">8M</th><th class="num">16M</th></tr></thead>
+        <tbody>
+          <tr><td>The formula's bits instead of the tuner's (same passes and boxes)</td><td class="num">1.08×</td><td class="num">1.06×</td><td class="num">0.98×</td><td class="num">0.93×</td></tr>
+          <tr><td>2 passes instead of 1</td><td class="num">1.30×</td><td class="num">1.27×</td><td class="num">1.25×</td><td class="num">1.33×</td></tr>
+          <tr><td>½ row per box instead of 1/8</td><td class="num">1.13×</td><td class="num">1.13×</td><td class="num">1.16×</td><td class="num">1.11×</td></tr>
+        </tbody>
+      </table></div>
+      <div class="result"><span class="k">Result</span>
+        <ul class="clean">
+          <li>The bits rule works: the formula's bits came within 8% of the tuner's. Values under 1 mean the formula's bits were slightly faster in this run.</li>
+          <li>The passes rule cost 25% to 33%. Experiment 3 already showed one pass stays faster than two up to 17 bits on the M5.</li>
+          <li>Rows per box cost 11% to 16%. The paper has no rule for it; the tuner found 1/8 by timing.</li>
+          <li>A version that fits pieces in the 16 MB cache instead took 1.58 to 2.10 times as long as the tuner's settings. At 1,048,576 rows it was slower than not cutting at all (2.10 against 2.00).</li>
+        </ul></div>
+      <p class="note">This race is not saved in the repository yet. Its program and results are in a temporary folder on the laptop.</p>
+    </div>
+  </section>
+
+  <!-- ===================== Tools ===================== -->
+  <section id="tools" class="stack">
+    <div class="col stack"><h2>Checks and run times</h2>
+      <p>Every program has a test mode that compares its answers with a slow method that is easy to check (comparing every row with every row). <code>make check</code> runs the same tests under a memory checker, and the threaded program under a thread checker.</p></div>
+    <div class="panel">
+      <div class="tablewrap"><table>
+        <thead><tr><th>Program</th><th class="num">Test cases</th></tr></thead>
+        <tbody>
+          <tr><td>Simple hash join, each box rule</td><td class="num">107 + 107</td></tr>
+          <tr><td>Radix partitioning</td><td class="num">238</td></tr>
+          <tr><td>Radix join</td><td class="num">4,558</td></tr>
+          <tr><td>Threaded joins</td><td class="num">5,524</td></tr>
+          <tr><td>Boxes and hash functions (experiment 6)</td><td class="num">5,751</td></tr>
+          <tr><td>Tuner</td><td class="num">191,213</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">All pass, in a fresh copy of the repository, on 23 November.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Run</th><th class="num">Time on the M5</th></tr></thead>
+        <tbody>
+          <tr><td>Experiment 1</td><td class="num">9 s</td></tr>
+          <tr><td>Experiment 2, both box rules</td><td class="num">2 s</td></tr>
+          <tr><td>Experiment 3</td><td class="num">56 s</td></tr>
+          <tr><td>Experiment 4, plus 2 other data shuffles</td><td class="num">7 min 2 s + 1 min 33 s</td></tr>
+          <tr><td>Experiment 5</td><td class="num">26 s</td></tr>
+          <tr><td>Experiment 6, boxes + hash functions</td><td class="num">2 min 35 s + 1 min 6 s</td></tr>
+          <tr><td>Everything, <code>scripts/run_experiments.sh</code></td><td class="num">about 18 min</td></tr>
+          <tr><td>All 8 PDF reports from saved results</td><td class="num">about 6 s</td></tr>
+          <tr><td>Tuner, full run</td><td class="num">2 min 0 s</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- ===================== Limits ===================== -->
+  <section id="limits" class="stack col">
+    <h2>What we could not measure</h2>
+    <ul class="clean">
+      <li><b>Cache misses.</b> macOS does not let a program read the processor's counters of cache misses. Every cache explanation here comes from timings and data sizes.</li>
+      <li><b>Keeping a thread on one core.</b> macOS decides which core runs each thread.</li>
+      <li><b>Large memory pages.</b> macOS does not let a program choose its page size, so the page-size half of experiment 3 was skipped.</li>
+      <li><b>Repeated or uneven keys.</b> Every key appears once in the timed data. Repeated keys would make some pieces and chains much longer.</li>
+      <li><b>Writing the result.</b> The joins count matches instead of writing every matched pair, which would add the same cost to both joins.</li>
+      <li><b>One table design.</b> Every join uses chained boxes with a power-of-two count. Other designs would have other best settings.</li>
+      <li><b>The paper's nested-loop variant.</b> The paper also joins very small pieces without a hash table. We built only the hash-table version.</li>
+    </ul>
+  </section>
+
+  <!-- ===================== Where ===================== -->
+  <section id="where" class="stack">
+    <div class="col stack"><h2>Where everything is</h2></div>
+    <div class="panel"><div class="tablewrap"><table>
+      <thead><tr><th>What</th><th>Where</th></tr></thead>
+      <tbody>
+        <tr><td>How to run everything, and every Mac change</td><td><code>m5-pro/README.md</code></td></tr>
+        <tr><td>The two measuring mistakes, with before and after numbers</td><td><code>m5-pro/DESIGN-FLAWS.md</code></td></tr>
+        <tr><td>The 8 PDF reports (01 to 07; 02 has two)</td><td><code>m5-pro/reports/</code></td></tr>
+        <tr><td>Every timing as raw data</td><td><code>m5-pro/results/</code></td></tr>
+        <tr><td>Results from before the fixes</td><td><code>m5-pro/archive/2026-11-22-before-fixes/</code></td></tr>
+        <tr><td>The programs (C) and report scripts (Python)</td><td><code>m5-pro/src/</code>, <code>m5-pro/analysis/</code></td></tr>
+        <tr><td>Live lab and full-run script</td><td><code>m5-pro/scripts/live.sh</code>, <code>m5-pro/scripts/run_experiments.sh</code></td></tr>
+        <tr><td>The tuner, its frozen rules and the M5 result</td><td><code>m5-pro/tuner/</code>, <code>tuner/SPEC.md</code>, <code>tuner/runs/apple-m5_2026-11-23_100003/report.pdf</code></td></tr>
+        <tr><td>This page and the two explainer pages</td><td><code>m5-pro/artifacts/</code></td></tr>
+        <tr><td>On GitHub</td><td>Pull requests #2 and #3, merged into <code>main</code> on 23 November. Branch <code>m5-pro-artifacts</code> holds the web pages; its pull request is not raised yet.</td></tr>
+      </tbody>
+    </table></div></div>
+  </section>
+
+  <!-- ===================== Tell ===================== -->
+  <section id="tell" class="stack">
+    <div class="col stack"><h2>Facts to tell the professor</h2>
+      <p>Each line is a measured fact and the file that backs it.</p></div>
+    <div class="panel"><div class="tablewrap"><table>
+      <thead><tr><th>Fact</th><th>Number</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td>Every experiment now runs on one computer.</td><td>Apple M5: 4 fast and 6 slower cores, 32 GB memory</td><td><code>reports/07-final-analysis.pdf</code></td></tr>
+        <tr><td>Where data sits in memory sets the time.</td><td>Same reads, 20 times as long with a 256-byte gap as with a 1-byte gap</td><td><code>reports/01-stride-scan.pdf</code></td></tr>
+        <tr><td>A plain hash join gets slower per row as tables grow.</td><td>4 ns per row at 10,000 rows; 27 ns at 2,000,000</td><td><code>reports/02-simple-hash-join.pdf</code></td></tr>
+        <tr><td>Cutting first pays off once tables outgrow the cache.</td><td>2.45 times as fast at 32,000,000 rows; 0.98 at 100,000</td><td><code>reports/04-radix-join.pdf</code></td></tr>
+        <tr><td>One pass is enough on the M5.</td><td>2 passes win only from 18 bits; the best setting used 1 pass at every size</td><td><code>reports/03-radix-partition.pdf</code>, <code>04</code></td></tr>
+        <tr><td>The radix join gains more from threads.</td><td>4 threads: 3.39 times against 3.00 times; 73 against 167 ms</td><td><code>reports/05-parallel-join.pdf</code></td></tr>
+        <tr><td>The number of boxes matters, and both old rules were slower.</td><td>Fastest ¼ row per box; Week 2 rule 1.29 times as long, Varun's 4.87 times (simple join, 16,777,216 rows)</td><td><code>reports/06-bucket-sweep.pdf</code></td></tr>
+        <tr><td>Our hash function spreads keys evenly.</td><td>Empty boxes within 0.06 percentage points of a perfectly random hash</td><td><code>reports/06-bucket-sweep.pdf</code></td></tr>
+        <tr><td>We found and fixed 2 measuring mistakes.</td><td>Clock reads added up to 10.4%; the 1-thread build went from 526 to 78 ms</td><td><code>DESIGN-FLAWS.md</code></td></tr>
+        <tr><td>Timing finds better settings than the paper's formula.</td><td>The formula's settings took 1.38 to 1.60 times as long</td><td>race on 23 November (not in the repository yet)</td></tr>
+        <tr><td>A tuner finds the settings without knowing the cache sizes.</td><td>2 minutes; 1 pass, 1/8 row per box, about 2,048 rows per piece; tie (1.002) on a size it never saw</td><td><code>tuner/runs/apple-m5_2026-11-23_100003/report.pdf</code></td></tr>
+      </tbody>
+    </table></div></div>
+  </section>
+
+  <footer class="col">Made on 23 November 2026 from the files in <code>m5-pro/</code>. Every time is the median of its recorded runs.</footer>
+</div>
+</body>
+</html>

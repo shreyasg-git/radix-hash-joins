@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>scan_benchmark.c explained</title>
+<link rel="stylesheet" href="explainer.css">
+</head>
+<body>
+<main>
+<nav class="top"><a href="index.html">&larr; All explainers</a></nav>
+<h1><code>scan_benchmark.c</code></h1>
+<p class="sub">Experiment 1: the stride scan. File: <code>m5-pro/src/scan_benchmark.c</code>, 197 lines. It does not include <code>common.h</code>; it is stand-alone and only builds on a Mac with Apple silicon.</p>
+
+<div class="box">
+<p><b>The short version.</b> This program has nothing to do with joins. It measures how the memory of this Mac behaves. It reads 200,000 single bytes from a 256 MB block, with a fixed gap (the <b>stride</b>) between each read: 1, 2, 4, 8, &hellip; up to 1,024 bytes. It times each scan. Two things show up in the times:</p>
+<ul>
+<li><b>The cache line.</b> Memory is copied into the cache in chunks of 128 bytes on this Mac. With a gap under 128 bytes, several reads fall inside the same chunk, so one copy serves many reads. With a gap of 128 or more, every read needs a new chunk.</li>
+<li><b>Cached or not.</b> Each scan runs two ways: <code>flushed</code> (the caches are emptied first) and <code>repeat_scan</code> (the same data was just read, so it may still be in the cache).</li>
+</ul>
+<p>The later experiments rely on these numbers to explain why a big lookup table is slow.</p>
+</div>
+
+<h2>The changes from the original (header, lines 1&ndash;25)</h2>
+<p>This is the Mac version of <code>src/scan_benchmark.c</code>, which was written for x86 Linux. There are 5 changes:</p>
+<ol>
+<li><b>Emptying the cache.</b> The original used the x86 <code>CLFLUSH</code> instruction. Its ARM counterpart (<code>DC CIVAC</code>) runs on macOS but has no measurable effect: random reads of 512 KiB took 2.6 ns each before and after it. So this program reads a separate 512 MB block instead, far larger than every cache on the chip, which pushes the scan's data out. This also empties the address-translation cache.</li>
+<li>The cache line size is read from <code>sysctl hw.cachelinesize</code> (128 bytes on the M5).</li>
+<li>The timer is <code>CLOCK_UPTIME_RAW</code> (ticks of 41.7 ns) instead of <code>CLOCK_MONOTONIC</code>.</li>
+<li>No thread pinning. The thread asks for the highest quality-of-service class, which runs on the fast cores.</li>
+<li>Ordering barriers are <code>DSB</code> + <code>ISB</code> instead of <code>LFENCE</code>/<code>MFENCE</code>.</li>
+</ol>
+
+<h2>Blocks</h2>
+
+<div class="block"><h3>Guard and constants <span class="lines">lines 36&ndash;51</span></h3>
+<dl><dt>What</dt><dd>
+<ul>
+<li>Refuses to compile on anything but macOS on ARM.</li>
+<li><code>READS</code> = 200,000 reads per scan. <code>BUFFER_BYTES</code> = 256 MiB. <code>EVICT_BYTES</code> = 512 MiB. 11 strides: 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024.</li>
+<li><code>random_u32</code>: a small random number generator (xorshift) with the fixed start value 20261105.</li>
+<li><code>barrier</code>: runs <code>dsb sy</code> and <code>isb</code>. This makes the processor finish every memory operation before it moves on, so a timer read cannot slip ahead of the reads being timed.</li>
+<li><code>timer_now</code>: the time in nanoseconds.</li>
+</ul></dd></dl></div>
+
+<div class="block"><h3><code>scan</code> <span class="lines">lines 53&ndash;58</span></h3>
+<dl><dt>Input</dt><dd>A pointer to the data and a stride.</dd>
+<dt>Returns</dt><dd>The sum of the 200,000 bytes read (at most 200,000 &times; 255 = 51,000,000, which fits in 32 bits).</dd>
+<dt>What</dt><dd>Reads one byte, moves forward by <code>stride</code> bytes, and repeats 200,000 times. The pointer is <code>volatile</code>, which stops the compiler from skipping the reads. The sum is a checksum: it proves the reads really happened and always gives the same answer.</dd></dl></div>
+
+<div class="block"><h3><code>evict_caches</code> <span class="lines">lines 60&ndash;69</span></h3>
+<dl><dt>What</dt><dd>Reads one byte of every 128-byte line of the separate 512 MB block, stores the sum somewhere the compiler cannot ignore, then runs a barrier. Afterwards the caches hold that block instead of the scan data.</dd></dl></div>
+
+<div class="block"><h3><code>open_output</code> <span class="lines">lines 71&ndash;75</span></h3>
+<dl><dt>What</dt><dd>Opens a file for writing inside the output folder. Exits with code 2 if it cannot.</dd></dl></div>
+
+<div class="block"><h3><code>eviction_check</code> <span class="lines">lines 77&ndash;119</span></h3>
+<dl>
+<dt>Returns</dt><dd>Three numbers through pointers: nanoseconds per read when the data is cached, after <code>DC CIVAC</code>, and after reading the 512 MB block. Each is the best of 5 tries.</dd>
+<dt>What</dt><dd>A check that the cache-emptying method works. It builds a chain of 4,096 lines (512 KiB) in random order, where each line holds the position of the next. Following the chain is a series of reads where each read must finish before the next can start, so they cannot overlap and the time per read is the true delay. It times the chain three ways and re-reads it between tries.</dd></dl></div>
+
+<div class="block"><h3><code>main</code> <span class="lines">lines 121&ndash;197</span></h3>
+<dl>
+<dt>Usage</dt><dd><code>scan_benchmark [OUTPUT_DIRECTORY] [repetitions]</code>. Folder defaults to <code>results</code>. Repetitions default to 30 (allowed 5&ndash;1,000).</dd>
+<dt>Setup</dt><dd>Creates the folder, asks for the fast cores, reads the cache line size, allocates the 256 MB scan block and the 512 MB eviction block (both aligned to 16 KB, the page size), fills the scan block with random bytes, and computes the expected checksum of every stride.</dd>
+<dt>Writes</dt><dd>
+<ul>
+<li><code>benchmark_metadata.json</code>: platform, CPU name, timer, settings, and the three numbers from <code>eviction_check</code>.</li>
+<li><code>timer_overhead.csv</code>: 1,000 samples of two back-to-back clock reads, to show the clock's resolution.</li>
+<li><code>raw_timings.csv</code>: one row per timed scan. Columns: <code>round, order, condition, stride_bytes, reads, address_span_bytes, selected_cache_lines, elapsed_ns, checksum</code>.</li>
+</ul></dd>
+<dt>The loop</dt><dd>
+<ol>
+<li>Runs rounds numbered &minus;3 up to repetitions &minus; 1. The 3 negative rounds are warm-ups and are not recorded.</li>
+<li>Each round has 22 jobs: 11 strides &times; 2 conditions, shuffled into a new order every round.</li>
+<li>For a <code>repeat_scan</code> job it first runs the scan once, untimed. For a <code>flushed</code> job it runs <code>evict_caches</code>.</li>
+<li>Then barrier, read the clock, scan, barrier, read the clock. If the checksum differs from the expected one, it stops with code 3.</li>
+<li>Records <code>address_span_bytes</code> = 199,999 &times; stride + 1, and <code>selected_cache_lines</code>: for strides under 128, the span divided by 128 rounded up; for 128 or more, simply 200,000 (one line per read).</li>
+</ol></dd>
+</dl></div>
+
+<h2>Things I noticed</h2>
+<div class="box warn">
+<ul>
+<li><b>It reuses an existing folder.</b> Line 125 accepts a folder that already exists (<code>errno != EEXIST</code>). The other programs refuse. Files with the same names inside it are overwritten.</li>
+<li><b><code>repeat_scan</code> does not guarantee a cached read.</b> At strides of 128 and up, a scan touches 200,000 different 128-byte lines, which is 25.6 MB. The M5's largest cache (L2) is 16 MB, so at those strides the data cannot all stay cached. <code>repeat_scan</code> means "right after reading the same data", not "fully in cache". I have not looked at the results to see how this shows.</li>
+<li>There is no <code>--test</code> mode in this program. Its only check is the checksum of every scan.</li>
+</ul>
+</div>
+<footer>Line numbers refer to <code>m5-pro/src/scan_benchmark.c</code>.</footer>
+</main>
+</body>
+</html>

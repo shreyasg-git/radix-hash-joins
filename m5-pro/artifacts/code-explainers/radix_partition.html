@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>radix_partition.c explained</title>
+<link rel="stylesheet" href="explainer.css">
+</head>
+<body>
+<main>
+<nav class="top"><a href="index.html">&larr; All explainers</a></nav>
+<h1><code>radix_partition.c</code></h1>
+<p class="sub">Experiment 3: how much does one partitioning pass cost? File: <code>m5-pro/src/radix_partition.c</code>, 249 lines. It uses shared helpers from <code>m5-pro/include/common.h</code>.</p>
+
+<div class="box">
+<p><b>The short version.</b> Partitioning means sorting rows into groups by the low bits of their scrambled key, without sorting inside each group. This program does only that, with no join. It measures two things:</p>
+<ol>
+<li>How the time per row changes as the number of groups grows (from 1 group up to 2<sup>20</sup> groups by default).</li>
+<li>Whether splitting the same total number of bits over 2 or 3 passes is faster than doing it in 1 pass. One big pass writes to many places at once, and that can overload the processor's small caches. More passes keep each pass small, but read and write all the data again.</li>
+</ol>
+</div>
+
+<div class="box warn">
+<p><b>Page size on the Mac.</b> The header describes a second experiment factor: 4 KiB pages versus 2 MiB "huge" pages, which only works on Linux. On macOS the program cannot choose a page size, so it uses the default and runs one page mode only. The CSV column <code>page_mode</code> says <code>default</code>.</p>
+</div>
+
+<h2>Pieces from <code>common.h</code> this file uses</h2>
+<ul>
+<li><code>radix_pass</code> (lines 257&ndash;285): does one pass. Sweep 1 (<b>histogram</b>) counts how many rows go to each new sub-group. A running total turns counts into start positions. Sweep 2 (<b>scatter</b>) copies each row into the next free slot of its sub-group. It returns the time of each sweep. The running total is counted in the scatter time.</li>
+<li><code>split_bits</code> (237&ndash;239): splits the total bits over the passes as evenly as possible. 7 bits in 2 passes becomes 4 and 3.</li>
+<li><code>radix_of</code> (232&ndash;234): the group number of a key: <code>(mix(key) &gt;&gt; shift)</code> masked to the pass's bits.</li>
+<li><code>allocate_touched</code>, <code>generate</code>, <code>pair_hash</code>, <code>shuffle_order</code>, <code>counters_*</code> (empty on the M5), <code>steal_ms</code> (-1 on macOS), <code>pin_to_cpu</code>, <code>parse_number</code>, <code>parse_list</code>, <code>open_in</code>, <code>make_results_directory</code>, <code>write_common_environment</code>.</li>
+</ul>
+
+<h2>Blocks</h2>
+
+<div class="block"><h3>Constants and types <span class="lines">lines 28&ndash;39</span></h3>
+<dl><dt>What</dt><dd>
+<ul>
+<li><code>MAX_BITS</code> is 24. <code>MAX_PASSES</code> is 4.</li>
+<li><code>Buffers</code>: the <code>input</code> table, two work buffers (<code>buffer_a</code>, <code>buffer_b</code>), and two boundary arrays (<code>start_a</code>, <code>start_b</code>), each with <code>2^MAX_BITS + 1</code> entries.</li>
+<li><code>Partitioned</code>: the result. A pointer to the final rows, and the boundaries of the final <code>2^bits</code> groups.</li>
+</ul></dd></dl></div>
+
+<div class="block"><h3><code>partition</code> <span class="lines">lines 41&ndash;66</span></h3>
+<dl>
+<dt>Input</dt><dd>The buffers, the row count, <code>total_bits</code>, <code>passes</code>, arrays to fill with per-pass times and counter readings, and the counters.</dd>
+<dt>Returns</dt><dd>A <code>Partitioned</code>.</dd>
+<dt>What</dt><dd>Starts with one group holding all rows. For each pass it takes the next group of bits (highest first), runs <code>radix_pass</code> over every existing group, records the histogram and scatter times, and swaps the roles of the two work buffers. The input is never changed.
+<br><b>With 0 bits and 1 pass</b> there is one group, so the pass is a plain copy of the table. That gives a baseline: the cost of just reading and writing every row once.
+<br>This is the same loop as <code>partition_all</code> in <code>radix_join.c</code>, with the per-pass timing added.</dd></dl></div>
+
+<div class="block"><h3>Correctness checks <span class="lines">lines 68&ndash;104</span></h3>
+<dl>
+<dt>What</dt><dd>
+<ul>
+<li><code>compare_records</code>: orders records by key, then row_id.</li>
+<li><code>check_partitioned</code>: returns 1 only if all of these hold. (1) The first boundary is 0 and the last is the row count, and boundaries never go backwards. (2) Every row in group <code>c</code> has group number <code>c</code>. (3) The sum of <code>pair_hash(key, row_id)</code> over the input equals the sum over the output, so no row was lost or invented. (4) If asked to compare exactly, it sorts copies of the input and output and compares them byte by byte.</li>
+</ul></dd></dl></div>
+
+<div class="block"><h3>Buffer helpers <span class="lines">lines 106&ndash;119</span></h3>
+<dl><dt>What</dt><dd><code>make_buffers</code> allocates and writes once (before any timing) the three row buffers and the two boundary arrays. The page mode applies only to the row buffers. <code>free_buffers</code> frees all five.</dd></dl></div>
+
+<div class="block"><h3><code>self_test</code> <span class="lines">lines 121&ndash;144</span></h3>
+<dl><dt>What</dt><dd>Tries 7 table sizes: 0, 1, 2, 37, 1,000, 4,096 and 100,003 rows. Keys include duplicates and the largest key (every 7th row gets 4,294,967,295; the others get random keys). For 1, 2 and 3 passes it tries every bit count from the lowest allowed (0 for 1 pass, otherwise the pass count) up to 12. That is 13 + 11 + 10 = 34 settings per size, 34 &times; 7 = <b>238 cases</b>. Each case runs <code>check_partitioned</code> with the exact comparison on.</dd></dl></div>
+
+<div class="block"><h3><code>main</code> <span class="lines">lines 148&ndash;249</span></h3>
+<dl>
+<dt>Usage</dt><dd><code>radix_partition --test</code>, or <code>radix_partition OUTPUT_DIRECTORY [--rows N] [--repeats R] [--max-bits B] [--passes 1,2,3] [--pages 4k,2m] [--seed S]</code>.</dd>
+<dt>Defaults</dt><dd>16,777,216 rows (2<sup>24</sup>), 15 repeats, up to 20 bits, passes 1, 2 and 3, seed 42.</dd>
+<dt>Steps</dt><dd>
+<ol>
+<li>Creates a new results folder (fails if it exists). Writes <code>environment.txt</code> and the <code>timings.csv</code> header.</li>
+<li>For each page mode (only one on the Mac): allocates the buffers, and fills <code>input</code> with the left table from <code>generate</code> (the same data as the simple join, seed 42). The right table is made and thrown away.</li>
+<li>Lists every setting: for each pass count, every bit count from its lowest allowed value up to <code>max_bits</code>.</li>
+<li>Runs <code>repeats + 1</code> rounds. In every round each setting runs once, in a newly shuffled order.</li>
+<li><b>Round 0 is the warm-up. It is the only round whose output is checked</b> (with <code>check_partitioned</code>, without the exact comparison) and it is not recorded. The recorded rounds 1 to 15 are not checked.</li>
+<li>For each recorded run it writes one CSV row <b>per pass</b>.</li>
+</ol></dd>
+<dt>Output</dt><dd><code>timings.csv</code> columns: <code>page_mode, rows, passes, total_bits, pass, pass_bits, clusters_after_pass, run, position, steal_ms, histogram_ms, scatter_ms, pass_ms</code>, then the counter columns (empty on the M5). Also <code>environment.txt</code>.</dd>
+</dl></div>
+
+<div class="box">
+<p><b>Checked.</b> I compiled this file and ran <code>--test</code> on 2026-11-23. It printed: <i>Passed 238 partitioning cases (sizes 0 to 100003, 0 to 12 bits, 1 to 3 passes).</i></p>
+</div>
+<footer>Line numbers refer to <code>m5-pro/src/radix_partition.c</code>, except <code>common.h</code> lines, which are named as such.</footer>
+</main>
+</body>
+</html>

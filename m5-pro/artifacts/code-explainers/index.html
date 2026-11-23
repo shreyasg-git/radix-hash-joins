@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code explainers</title>
+<link rel="stylesheet" href="explainer.css">
+</head>
+<body>
+<main>
+<h1>Code explainers</h1>
+<p class="sub">One page for each program in <code>m5-pro/src</code>. Each page says what is in the file, what each block takes in and gives back, and what the program does. They are in the order of the experiments.</p>
+
+<div class="cards">
+<a class="card" href="scan_benchmark.html"><b>scan_benchmark.c</b><span>Experiment 1. Reads memory at different gaps to show how this Mac's cache behaves. No join.</span></a>
+<a class="card" href="hash_join.html"><b>hash_join.c</b><span>Experiment 2. The simple hash join. The baseline.</span></a>
+<a class="card" href="radix_partition.html"><b>radix_partition.c</b><span>Experiment 3. The cost of splitting a table into groups, with 1, 2 or 3 passes.</span></a>
+<a class="card" href="radix_join.html"><b>radix_join.c</b><span>Experiment 4. The radix join against the simple join.</span></a>
+<a class="card" href="parallel_join.html"><b>parallel_join.c</b><span>Experiment 5. Both joins on 1, 2 and 4 threads.</span></a>
+<a class="card" href="bucket_sweep.html"><b>bucket_sweep.c</b><span>Experiment 6. How many buckets, and which hash function?</span></a>
+</div>
+
+<h2>Words used on these pages</h2>
+<table>
+<tr><th>Word</th><th>What it means</th></tr>
+<tr><td>Join</td><td>Pairing up the rows of two tables whose key is equal.</td></tr>
+<tr><td>Hash function</td><td>A recipe that turns a key into a scrambled number. Used to pick a bucket.</td></tr>
+<tr><td>Bucket</td><td>One slot of the lookup structure. Rows whose scrambled key lands on the same slot form a chain.</td></tr>
+<tr><td>Build, probe</td><td>Build: put every left row into the lookup structure. Probe: for each right row, look for matching left rows.</td></tr>
+<tr><td>Cache</td><td>A small, fast memory next to each core that holds copies of recently used data. On this M5: 128 KB closest to the core (L1) and 16 MB next (L2).</td></tr>
+<tr><td>Cache line</td><td>The chunk the cache copies in at one time. 128 bytes on this Mac.</td></tr>
+<tr><td>Page</td><td>The chunk the operating system uses to map memory addresses. 16 KB on this Mac.</td></tr>
+<tr><td>Partition</td><td>One of the groups a table is split into, by the low bits of the scrambled key.</td></tr>
+<tr><td>Pass</td><td>One trip over all the data. Radix partitioning can split the bits over several passes.</td></tr>
+<tr><td>Checksum</td><td>One number made by adding up a fingerprint of every result pair. Two runs that find the same pairs get the same number, whatever the order.</td></tr>
+<tr><td>Warm-up run</td><td>A run that is done first and not recorded, so the first-run slowness is not in the results.</td></tr>
+<tr><td>Thread</td><td>One line of work that runs on its own core.</td></tr>
+<tr><td>Nested loop</td><td>The slow join that compares every left row with every right row. Used in tests as the answer to compare against.</td></tr>
+</table>
+
+<h2>What I ran to check these pages</h2>
+<p>On 2026-11-23 I compiled each program into a scratch folder (not into <code>bin/</code>) and ran the self-test of the four that have one:</p>
+<table>
+<tr><th>Program</th><th>Result</th></tr>
+<tr><td><code>hash_join</code></td><td>107 cases passed</td></tr>
+<tr><td><code>radix_partition</code></td><td>238 cases passed</td></tr>
+<tr><td><code>radix_join</code></td><td>4,558 checks passed</td></tr>
+<tr><td><code>parallel_join</code></td><td>5,524 checks passed</td></tr>
+<tr><td><code>bucket_sweep</code></td><td>5,751 checks passed</td></tr>
+<tr><td><code>scan_benchmark</code></td><td>no self-test; it compiles, and its only check is the checksum of every scan</td></tr>
+</table>
+<p>I did not run any of the benchmarks, and I did not read their results. The pages describe the code, not the numbers it produced.</p>
+<footer>Files: <code>m5-pro/artifacts/code-explainers/</code>. Shared style: <code>explainer.css</code>.</footer>
+</main>
+</body>
+</html>

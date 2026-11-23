@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>radix_join.c explained</title>
+<link rel="stylesheet" href="explainer.css">
+</head>
+<body>
+<main>
+<nav class="top"><a href="index.html">&larr; All explainers</a></nav>
+<h1><code>radix_join.c</code></h1>
+<p class="sub">Experiment 4: simple hash join versus radix hash join. File: <code>m5-pro/src/radix_join.c</code>, 358 lines. It uses shared helpers from <code>m5-pro/include/common.h</code>.</p>
+
+<div class="box">
+<p><b>The short version.</b> The simple join builds one big lookup table on the whole left table. Once that table is bigger than the processor's cache (the small, fast memory next to each core), almost every lookup goes to slow main memory. The radix join adds a first step to avoid that:</p>
+<ol>
+<li><b>Partition:</b> split both tables into <code>2^bits</code> groups, using the low <code>bits</code> bits of the scrambled key. Matching keys always land in the same group number in both tables.</li>
+<li><b>Join each pair of groups:</b> for group <code>p</code>, build a small lookup table on the left group and probe it with the right group. Each small table is meant to fit in the cache.</li>
+</ol>
+<p>Partitioning costs extra passes over all the data. The experiment asks when that cost is paid back. The same file also runs the simple join, so both are timed under the same rules.</p>
+</div>
+
+<h2>Pieces from <code>common.h</code> this file uses</h2>
+<p>These are not in <code>radix_join.c</code>. They live in <code>m5-pro/include/common.h</code>. Line numbers below are for that file.</p>
+<table>
+<tr><th>Name</th><th>Lines</th><th>What it does</th></tr>
+<tr><td><code>hash_build</code></td><td>194&ndash;208</td><td>Same idea as the simple join's <code>build</code>, with two changes. Chain links are 32-bit numbers (half the memory). And it takes a <code>shift</code>: the bucket is <code>(mix(key) &gt;&gt; shift) &amp; mask</code>. It sets every bucket to <code>EMPTY</code> first. That fill counts as build time.</td></tr>
+<tr><td><code>bucket_count_for</code></td><td>188&ndash;192</td><td>The smallest power of two that is at least 2 &times; the row count. So a table is at most half full.</td></tr>
+<tr><td><code>hash_probe</code></td><td>210&ndash;222</td><td>For each right row, walks its bucket's chain and compares keys. For each match adds 1 to <code>matches</code> and adds <code>pair_hash(left row_id, right row_id)</code> to <code>checksum</code>. It never stores pairs.</td></tr>
+<tr><td><code>radix_of</code></td><td>232&ndash;234</td><td><code>(mix(key) &gt;&gt; shift)</code> masked to <code>bits</code> bits.</td></tr>
+<tr><td><code>split_bits</code></td><td>237&ndash;239</td><td>Splits <code>bits</code> into <code>passes</code> groups as evenly as possible. 7 bits in 2 passes becomes 4 and 3.</td></tr>
+<tr><td><code>radix_pass</code></td><td>257&ndash;285</td><td>One pass over all current groups. Sweep 1 counts how many rows go to each new sub-group. Then a running total turns the counts into start positions. Sweep 2 copies each row to the next free slot of its sub-group. Returns the time of each sweep, which this file ignores.</td></tr>
+<tr><td>others</td><td></td><td><code>allocate_touched</code> (allocate memory and write it once, so page faults happen before any timer), <code>generate</code> and <code>expected_result</code> (the test data and its known answer), <code>shuffle_order</code>, <code>steal_ms</code> (time a virtual-machine host took away; -1 on macOS), <code>pin_to_cpu</code>, <code>counters_*</code> (hardware counters, Linux only, so empty on the M5), <code>timer_cost_ns</code>, <code>parse_number</code>, <code>parse_list</code>.</td></tr>
+</table>
+<div class="box">
+<p><b>Why <code>shift = bits</code> in the radix join.</b> Inside one partition, every key has the same low <code>bits</code> bits. If the buckets used those same bits, all rows would pile into a few buckets. So the radix join takes buckets from the bits <i>above</i> them. The simple join uses <code>shift = 0</code>.</p>
+</div>
+
+<h2>Blocks in <code>radix_join.c</code></h2>
+
+<div class="block"><h3>Header comment <span class="lines">lines 1&ndash;34</span></h3>
+<dl><dt>What</dt><dd>States the design rules: buffers are allocated before timing; filling buckets with <code>EMPTY</code> counts as build time; partition, build and probe are timed separately. It also records the "timing fix" from <code>DESIGN-FLAWS.md</code>, flaw 1: the older version read the clock twice per partition, about 9 ns per read on the M5. With 16,384 partitions that is 0.3 ms, 18% of a 100,000-row run.</dd></dl></div>
+
+<div class="block"><h3>Types and settings <span class="lines">lines 37&ndash;51</span></h3>
+<dl><dt>What</dt><dd>
+<ul>
+<li><code>MAX_BITS</code> is 22. <code>MAX_PASSES</code> is 3.</li>
+<li><code>PartitionBuffers</code>: two row buffers (<code>a</code>, <code>b</code>) and two boundary arrays (<code>start_a</code>, <code>start_b</code>). Partitioning passes alternate between them.</li>
+<li><code>clock_per_partition</code>: the switch for the old timing method.</li>
+<li><code>JoinTimes</code>: what a join returns. Six times (<code>partition_r_ms</code>, <code>partition_s_ms</code>, <code>build_ms</code>, <code>probe_ms</code>, <code>join_ms</code>, <code>total_ms</code>), <code>max_partition_rows</code> (largest left partition) and a <code>JoinResult</code>.</li>
+</ul></dd></dl></div>
+
+<div class="block"><h3><code>partition_all</code> <span class="lines">lines 53&ndash;79</span></h3>
+<dl><dt>Input</dt><dd>A table, its row count, <code>bits</code>, <code>passes</code>, and the buffers.</dd>
+<dt>Returns</dt><dd>A pointer to the partitioned rows. Through <code>*bounds</code> it also returns the <code>2^bits + 1</code> positions where partitions start and end.</dd>
+<dt>What</dt><dd>Starts with one group holding everything. Each pass splits every group on the next bit group, starting with the highest of the low <code>bits</code> bits and working down. Using several smaller passes instead of one big one keeps the number of places written to at once small. The input table is never changed. The output flips between buffer <code>a</code> and buffer <code>b</code> each pass.
+<br><b>Result:</b> partition <code>p</code> holds exactly the rows whose <code>mix(key)</code> has low <code>bits</code> bits equal to <code>p</code>.</dd></dl></div>
+
+<div class="block"><h3><code>simple_join</code> <span class="lines">lines 81&ndash;96</span></h3>
+<dl><dt>Returns</dt><dd><code>JoinTimes</code>.</dd>
+<dt>What</dt><dd>Times <code>hash_build</code> on the whole left table, then <code>hash_probe</code> with the whole right table. <code>shift</code> is 0. Total = build + probe.</dd></dl></div>
+
+<div class="block"><h3><code>radix_join</code> <span class="lines">lines 98&ndash;156</span></h3>
+<dl><dt>Input</dt><dd>Both tables, <code>bits</code>, <code>passes</code>, the buffers, and optional counters.</dd>
+<dt>Returns</dt><dd><code>JoinTimes</code>.</dd>
+<dt>What</dt><dd>
+<ol>
+<li>Times the partitioning of the left table (<code>partition_r_ms</code>) and the right table (<code>partition_s_ms</code>).</li>
+<li>Loops over partitions <code>0</code> to <code>2^bits - 1</code>. Each time it builds a small table on left partition <code>p</code> (with <code>shift = bits</code>) and probes it with right partition <code>p</code>. The same <code>buckets</code> and <code>next</code> arrays are reused every time.</li>
+</ol>
+<b>Two timing modes:</b>
+<ul>
+<li><b>Clean (default):</b> no clock reads inside the loop. The build time comes from a second, build-only pass run right after the join; that pass is not part of the total. Probe time = join time &minus; build time. So in this mode the build and probe times are an estimate; the totals are exact.</li>
+<li><b>Per-partition:</b> two clock reads per partition, the older way, kept to show the difference.</li>
+</ul></dd></dl></div>
+
+<div class="box warn">
+<p><b>One thing I noticed.</b> In clean mode the last counter reading (<code>c2</code>, line 148) is taken <i>after</i> the extra build-only pass. On Linux the <code>join_</code> counter columns would therefore include that extra pass. The M5 has no counters, so those columns are empty there. I did not check whether any report uses them.</p>
+</div>
+
+<div class="block"><h3>Buffer helpers <span class="lines">lines 158&ndash;169</span></h3>
+<dl><dt>What</dt><dd><code>make_partition_buffers</code> makes two row buffers of <code>rows</code> rows and two boundary arrays of <code>2^max_bits + 1</code> entries, all written once before any timing. <code>free_partition_buffers</code> frees them.</dd></dl></div>
+
+<div class="block"><h3>Correctness code <span class="lines">lines 171&ndash;243</span></h3>
+<dl>
+<dt>What</dt><dd>
+<ul>
+<li><code>nested_loop</code>: the slow reference join. Compares every pair and returns the match count and checksum.</li>
+<li><code>check</code>: runs the simple join, then the radix join in both timing modes, with 1, 2 and 3 passes, and every <code>bits</code> from the pass count up to 8. That is 1 + 2 &times; (8 + 7 + 6) = <b>43 joins per input</b>. Each is compared with the reference. Exits on any difference.</li>
+<li><code>self_test</code>: 5 hand cases (duplicate and boundary keys, no matches, empty left, empty right, both empty), 100 random cases with 1&ndash;300 rows per side and many duplicate keys, and 1 case with 5,000 generated rows. 106 inputs &times; 43 joins = <b>4,558 checks</b>.</li>
+</ul>
+This test compares the match count and the checksum, not every row pair (the simple join's test compares every pair).</dd></dl></div>
+
+<div class="block"><h3><code>main</code> <span class="lines">lines 247&ndash;358</span></h3>
+<dl>
+<dt>Usage</dt><dd><code>radix_join --test</code>, or <code>radix_join OUTPUT_DIRECTORY [--sizes] [--bits] [--passes] [--repeats] [--seed] [--timing clean|per-partition]</code>.</dd>
+<dt>Defaults</dt><dd>Sizes 100,000 / 1M / 2M / 4M / 8M / 16M / 32M rows per table. Bits 0, 2, 4, &hellip; 18 (0 means the simple join). Passes 1 and 2. Repeats 15. Seed 42.</dd>
+<dt>Setup</dt><dd>Creates a new results folder (fails if it exists). Asks for the fast cores. Writes <code>environment.txt</code> (including the cost of one clock read and the timing mode) and the <code>timings.csv</code> header.</dd>
+<dt>For each size</dt><dd>
+<ol>
+<li>Allocates both tables, buffers and lookup arrays before any timing. Generates the data and the expected answer.</li>
+<li>Builds the list of settings. Skips any <code>bits</code> where <code>2^bits &gt; rows / 4</code> (fewer than about 4 rows per partition; for 100,000 rows that limits bits to 14 or less). Skips settings with more passes than bits. The simple join is listed once.</li>
+<li>Runs <code>repeats + 1</code> rounds. Round 0 is a warm-up and is not recorded. Every round runs every setting once, in a newly shuffled (but repeatable) order.</li>
+<li>After each join, checks matches and checksum against the expected values, and stops on a mismatch.</li>
+<li>Writes one CSV row per setting per recorded round.</li>
+</ol></dd>
+<dt>Output</dt><dd><code>timings.csv</code> columns: <code>rows_per_input, algorithm, total_bits, passes, run, position, steal_ms, partitions, max_partition_rows, partition_r_ms, partition_s_ms, build_ms, probe_ms, join_ms, total_ms, matches</code>, then the <code>partition_</code> and <code>join_</code> counter columns.</dd>
+</dl></div>
+
+<h2>Radix join compared with the simple join</h2>
+<table>
+<tr><th></th><th>Simple join</th><th>Radix join</th></tr>
+<tr><td>Lookup tables</td><td>1 big table</td><td><code>2^bits</code> small tables, reused one at a time</td></tr>
+<tr><td>Extra work</td><td>none</td><td>partitioning both tables</td></tr>
+<tr><td>Bucket bits</td><td><code>shift = 0</code></td><td><code>shift = bits</code> (above the partition bits)</td></tr>
+<tr><td>Checks in test</td><td>every row pair (in <code>hash_join.c</code>)</td><td>match count and checksum</td></tr>
+</table>
+<p>The simple join inside <code>radix_join.c</code> uses the same table code as the radix join (32-bit links, at-most-half-full tables), so the comparison inside this experiment is like for like. That differs from the stand-alone <code>hash_join.c</code>, which uses 64-bit links.</p>
+
+<div class="box">
+<p><b>Checked.</b> I compiled this file and ran <code>--test</code> on 2026-11-23. It printed: <i>Passed 4558 join checks against the nested-loop reference.</i></p>
+</div>
+<footer>Line numbers refer to <code>m5-pro/src/radix_join.c</code>, except where the table says <code>common.h</code>.</footer>
+</main>
+</body>
+</html>
