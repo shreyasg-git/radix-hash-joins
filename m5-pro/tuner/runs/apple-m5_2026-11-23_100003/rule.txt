@@ -1,0 +1,11 @@
+spec=1
+rows_per_partition=2048
+passes=1
+rows_per_bucket=0.125
+formula=bits = round(log2(rows_per_input / 2048)), 1 pass(es), 1/8 rows per bucket
+test_rows=8388608
+test_rule=12/1/0.125
+test_best=11/1/0.125
+test_rule_vs_best=1.0023
+test_tied=yes
+test_seconds=4.6

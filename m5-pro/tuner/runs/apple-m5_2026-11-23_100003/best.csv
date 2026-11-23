@@ -1,0 +1,6 @@
+spec,rows_per_input,role,bits,passes,rows_per_bucket,median_ns_per_row,min_ns_per_row,max_ns_per_row,no_partitioning_ns_per_row,gain_vs_no_partitioning,tied_settings,range_edge
+1,1048576,train,11,1,0.125,9.9195,9.7254,10.1713,17.0528,1.719,10/1/0.125;12/1/0.125;9/1/0.125,rows per bucket at the smallest tested value
+1,4194304,train,12,1,0.125,10.2734,9.9691,10.9296,26.5404,2.583,11/1/0.125;13/1/0.125;11/1/0.25;10/1/0.25,rows per bucket at the smallest tested value
+1,16777216,train,10,1,0.125,10.9995,10.7404,11.3799,29.4637,2.679,11/1/0.125;9/1/0.125;12/1/0.25;12/1/0.125,rows per bucket at the smallest tested value
+1,8388608,test-best,11,1,0.125,10.7520,10.7276,11.0270,20.3290,1.891,,
+1,8388608,test-rule,12,1,0.125,10.7763,10.6592,18.6901,20.3290,1.886,,
