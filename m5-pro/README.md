@@ -170,9 +170,18 @@ The CSV files are plain text with a header row, so any tool can read them.
 
 ## Explainer pages
 
-`pages/` holds the two web pages made from these results:
+`artifacts/` holds the two web pages made from these results. Double-click a
+file to open it in a browser; no login or server is needed. The fonts load
+from Google Fonts when online; offline the pages fall back to the system font.
+- `how-we-test-joins.html`: what each of the six experiments asks, how it is
+  set up, and what it measured. Built by
+  `python3 artifacts/source/make_design_page.py results artifacts/how-we-test-joins.html`
+  from `artifacts/source/design_template.html`; every number on it comes from
+  `results/`.
 - `hash-bucket-lab.html`: how the hash join files rows into boxes, how evenly
-  `mix` spreads our keys, and the two bucket rules timed on the M5.
-- `experiment-design.html`: built by
-  `python3 pages/make_design_page.py results pages/experiment-design.html`
-  from `pages/design_template.html`; every number on it comes from `results/`.
+  `mix` spreads our keys, and the two bucket rules timed on the M5. Its lab
+  section rebuilds a hash table in the browser as you change the settings.
+
+The same two pages are also published online (private to the owner):
+[How We Test Joins](https://claude.ai/artifact/Voi2wNcx9smsHLuSjdSPt9) and
+[Hash Bucket Lab](https://claude.ai/artifact/7uvb4pBjwgHkgY16CNVLsE).

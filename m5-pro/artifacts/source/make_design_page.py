@@ -1,6 +1,6 @@
 """Builds the experiment-design page from the M5 results.
 
-python3 make_design_page.py RESULTS_DIR OUT.html [--r04 DIR] [--r05 DIR] [--old05 DIR]
+python3 artifacts/source/make_design_page.py RESULTS_DIR OUT.html [--r04 DIR] [--r05 DIR] [--old05 DIR]
 --old05: experiment 5 results from before the insert fix (default: the archive).
 """
 import argparse, csv, json, statistics
@@ -17,7 +17,7 @@ a = ap.parse_args()
 R = a.results
 r04 = a.r04 or R / "04-radix-join"
 r05 = a.r05 or R / "05-parallel-join"
-old05 = a.old05 or Path(__file__).resolve().parent.parent / "archive/2026-11-22-before-fixes/results/05-parallel-join"
+old05 = a.old05 or Path(__file__).resolve().parents[2] / "archive/2026-11-22-before-fixes/results/05-parallel-join"
 rd = lambda p: list(csv.DictReader(open(p)))
 env = lambda d: dict(l.split("=", 1) for l in (d / "environment.txt").read_text().splitlines() if "=" in l)
 f = float

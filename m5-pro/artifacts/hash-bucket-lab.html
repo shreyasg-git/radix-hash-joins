@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hash Bucket Lab</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,7 +34,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
-body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6;
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
 .wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 28px; }
 .col { max-width: 68ch; }
@@ -97,6 +102,8 @@ ul.clean { margin: 0; padding-left: 1.1rem; display: grid; gap: 6px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
+</head>
+<body>
 <div class="wrap">
   <header class="stack col">
     <div class="eyebrow">Radix hash join project · simple hash join</div>
@@ -462,3 +469,5 @@ function renderBits() {
 render();
 renderBits();
 </script>
+</body>
+</html>
