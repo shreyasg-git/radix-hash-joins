@@ -11,13 +11,19 @@ MDB_CFLAGS = -DNDEBUG $(shell $(PC) --cflags monetdb-gdk libxxhash openssl)
 MDB_LIBS = $(shell $(PC) --libs monetdb-gdk) -Wl,-rpath,$(MONETDB)/lib -lm
 TUNER = ../../tuner/src/tune.c
 
+all: bin/step1 bin/step2
 step1: bin/step1
+step2: bin/step2
 
 bin/step1: src/step1_hello.c src/monetdb_glue.h $(TUNER)
 	@mkdir -p bin
 	$(CC) $(CFLAGS) $(MDB_CFLAGS) -o $@ src/step1_hello.c $(MDB_LIBS)
 
+bin/step2: src/step2_one_size.c src/monetdb_glue.h $(TUNER)
+	@mkdir -p bin
+	$(CC) $(CFLAGS) $(MDB_CFLAGS) -o $@ src/step2_one_size.c $(MDB_LIBS)
+
 clean:
 	rm -rf bin
 
-.PHONY: step1 clean
+.PHONY: all step1 step2 clean

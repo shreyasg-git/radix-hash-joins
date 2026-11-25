@@ -41,6 +41,7 @@ the number of matches and the checksum against the tuner's answer.
 | Step | What it checks | Result |
 |---|---|---|
 | 1 | Can our program call `BATjoin` at all? 10 rows. | Same 5 matches and checksum as the tuner's nested-loop join |
+| 2 | One join at 1,048,576 rows: which method MonetDB picks, one timing | Hash join, hash table on R (as the tuner). 40.70 ns per row against the tuner's 9.95 (one run each) |
 
 ### Step 1: call MonetDB's join on 10 rows
 
@@ -51,3 +52,35 @@ cd exp1-monetdb-join && make step1 && ./bin/step1
 Prints both tables, MonetDB's 5 matching pairs, and
 `SAME ANSWER` (5 matches, checksum `21fe97ca324d8a4d` from both MonetDB and
 the tuner's nested-loop join). Builds with 0 warnings.
+
+### Step 2: one join at 1,048,576 rows
+
+```
+cd exp1-monetdb-join && make step2 && ./bin/step2
+```
+
+First an untimed join with MonetDB's join messages on. They show, in order:
+1. it checks whether either column is sorted (neither is; under 1 ms);
+2. it samples 1,000 rows of each column to guess how many different keys
+   there are (all 1,000 differ);
+3. it picks `hashjoin` and builds a new hash table on R, the right input:
+   the same side the tuner builds on;
+4. the table has 1,198,372 boxes = 1,048,576 × 8/7, so 0.875 rows per box,
+   plus one link per row; 685,625 boxes are in use.
+
+Then new columns (so nothing from the first join carries over) and one timed
+join of each kind. One run each, so this only shows that everything works:
+
+| Join at 1,048,576 rows | ns per row |
+|---|---|
+| MonetDB `BATjoin` | 39.67 |
+| turning its answer into the tuner's checksum | 1.03 |
+| MonetDB total | 40.70 |
+| tuner's join, its pick: 11 bits, 1 pass, 1/8 row per box | 9.95 |
+
+Both answers: 524,288 matches, checksum `884915f6528a6bfd`.
+
+One difference to keep in mind: MonetDB's join writes out every matching
+pair (two lists of 524,288 row positions) and makes its hash table's memory
+during the join; the tuner's join adds each pair to the checksum straight
+away and reuses memory it set up before the clock starts.
