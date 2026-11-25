@@ -22,12 +22,15 @@ it and its databases. They stay out of this repository (`.gitignore`).
   about rows × 8/7 boxes, plus one link per row). Nothing cuts the input into
   cache-sized pieces. For threads, the planner cuts the biggest table into
   row ranges (`monetdb5/optimizer/opt_mitosis.c`), one join per range.
-- **There was one until 2012.** Peter Boncz's radix module
-  (`monetdb5/modules/mal/radix.mx`, 4,957 lines: `radix_cluster`,
-  `phash_join`, `radix_join`, `radix_decluster`) was deleted on 2012-03-28
-  (commit `0adbe4238f`). The last release with it is Dec2011-SP2
-  (2012-03-12). It never ran by itself: a person wrote the plan by hand and
-  gave the bits of every pass, for example `radix_cluster(b, 6, 5)`.
+- **There was one until 2007, and its file until 2012.** Peter Boncz's
+  radix module (`radix.mx`: `radix_cluster`, `phash_join`, `radix_join`,
+  `radix_decluster`) was last compiled on 2007-09-12 (commit `33a91903a7`).
+  On 2007-10-04 the build file commented it out (`#radix.mx`, commit
+  `892ef9b796`, "Merged GDK-2 branch"); the file stayed in the source tree,
+  not built, until it was deleted on 2012-03-28 (commit `0adbe4238f`). So
+  Dec2011-SP2 still contains the file but does not build it. It never ran by
+  itself: a person wrote the plan by hand and gave the bits of every pass,
+  for example `radix_cluster(b, 6, 5)`.
 - **Nothing in MonetDB tunes the join by timing it.** Every size in the join
   and the hash table is a fixed number in the code.
 
@@ -163,3 +166,52 @@ What this does not show yet:
   them. A database needs the pairs to fetch other columns afterwards.
 - One thread, one machine, one data set (unique keys, both tables the same
   size, half of S matching), as in the race.
+
+## Experiment 2: Boncz's radix join from MonetDB, copied, on the tuner's data
+
+Folder `exp2-boncz-radix/`. `src/boncz_radix.h` is a copy of Boncz's
+`radix_cluster` and `phash_join` as MonetDB last compiled them (2007), on the
+tuner's rows. `./fetch-original.sh` saves the original as
+`original/radix-2007.mx` (not committed); the copy names the original line of
+every function. The core functions are the same in the 2011 copy except for
+variable names. Plain C: no MonetDB build needed.
+
+How Boncz's join differs from the tuner's, on the same idea:
+
+| | Tuner's join | Boncz's join (MonetDB 2007) |
+|---|---|---|
+| Key mixer | SplitMix64 (`mix`) | `(x>>7) ^ (x>>13) ^ (x>>21) ^ x` (`int_HUSSLE`, radix.mx:1270) |
+| Cutting one pass | count every row, then move every row (2 reads) | give every piece an equal share, move rows until one is full, then estimate the rest from what was moved or count it, shift the pieces, finish (radix.mx:2053) |
+| Finding the pieces when joining | list of piece bounds | walk both cut tables, find runs of equal piece number (radix.mx:2791) |
+| Hash table | one per piece, boxes = rows / (rows per box), a knob | one shared, cleared per piece; boxes = the smallest power of 2 >= R's average piece size (0.5 to 1 row per box), not a knob |
+| Box and link entries | 4 bytes | 8 bytes (`hash_t` = `oid`, 64-bit default in 2007) |
+| Knobs | bits, passes, rows per box | bits per pass, given by hand |
+
+What the copy changes, all listed at the top of `src/boncz_radix.h`: the
+tuner's 8-byte rows and positions in rows, not bytes; each pass's output in
+the tuner's prepared memory instead of a new table per pass; a match adds to
+the checksum instead of being written out; no stopping at the first match
+(radix.mx stopped when R's keys were known unique); `memmove` instead of an
+overlapping `memcpy`.
+
+| Step | What it checks | Result |
+|---|---|---|
+| 1 | Does the copy give right answers? 12 sizes, every setting | 486 of 486 right |
+
+### Step 1: right answers, nothing timed
+
+```
+cd exp2-boncz-radix && make step1 && ./bin/step1
+```
+
+12 table sizes from 1 to 262,144 rows (odd sizes too, so pieces are uneven),
+every bits setting the tuner allows, 1 to 3 passes, with and without stopping
+at the first match: 486 of 486 give the tuner's expected matches and checksum
+(and the tuner's nested-loop answer at up to 4,097 rows).
+
+How the 34,420 cuts finished: 30,964 (90.0%) fitted the equal first shares;
+3,456 (10.0%) counted the rest exactly, 6 of them after first estimating it.
+The tuner's keys are consecutive numbers, and Boncz's mixer spreads
+consecutive numbers almost evenly over the pieces, so his guess of equal
+sizes is usually right on this data. Data with uneven keys would make him
+count more often.
