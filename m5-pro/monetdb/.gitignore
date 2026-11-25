@@ -1,0 +1,6 @@
+# MonetDB's own code, our build of it, and its databases stay out of this repo.
+source/
+build/
+install/
+dbfarm/
+*.log
