@@ -197,6 +197,7 @@ overlapping `memcpy`.
 | Step | What it checks | Result |
 |---|---|---|
 | 1 | Does the copy give right answers? 12 sizes, every setting | 486 of 486 right |
+| 2 | One size (1,048,576 rows), same bits and passes as the tuner's pick, 5 repeats | Boncz's join 9.64 ns per row, the tuner's 10.14: Boncz 5% faster, in 5 of 5 repeats |
 
 ### Step 1: right answers, nothing timed
 
@@ -215,3 +216,32 @@ The tuner's keys are consecutive numbers, and Boncz's mixer spreads
 consecutive numbers almost evenly over the pieces, so his guess of equal
 sizes is usually right on this data. Data with uneven keys would make him
 count more often.
+
+### Step 2: the same bits and passes, at 1,048,576 rows
+
+```
+cd exp2-boncz-radix && make step2 && ./bin/step2      # output: runs/step2_1048576.txt
+```
+
+Both joins at the tuner's pick for this size, 11 bits in 1 pass; the tuner's
+join with its 1/8 row per box, Boncz's with his own rule (512 rows per piece
+here, so 512 boxes: 1 row per box). One untimed warm-up each, then 5 repeats,
+alternating; every answer checked.
+
+| Repeat | Boncz's join | Tuner's join |
+|---|---|---|
+| 1 | 9.52 | 10.16 |
+| 2 | 9.59 | 10.19 |
+| 3 | 9.44 | 10.16 |
+| 4 | 9.91 | 10.04 |
+| 5 | 9.72 | 10.16 |
+| average | 9.64 | 10.14 |
+
+ns per row. Boncz's join took 0.95 times the tuner's time, faster in 5 of 5.
+
+Why: both of Boncz's cuts in a join (R and S) fitted the equal first shares,
+so each read its input once; the tuner's cut always reads its input twice
+(count, then move). That comes from this data: the keys are consecutive
+numbers, and his mixer puts exactly as many of them in every piece. With
+uneven keys his cut would have to count as well. One size, one setting, 5
+repeats: not yet a result.

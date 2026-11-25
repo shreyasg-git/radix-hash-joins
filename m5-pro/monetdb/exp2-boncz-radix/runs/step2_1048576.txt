@@ -1,0 +1,16 @@
+cpu: Apple M5
+priority: macOS cannot pin threads; highest QoS class (prefers performance cores)
+rows per table: 1048576, repeats: 5
+tuner's join: 11 bits, 1 pass, 1/8 rows/bucket
+Boncz's join: 11 bits, 1 pass, its own rows-per-box rule
+
+Boncz's cuts in one join (R and S): 2; fitted the equal first shares: 2; estimated: 0; counted: 0
+
+repeat | Boncz's join | tuner's join   (ns per row)
+     1 |         9.52 |        10.16
+     2 |         9.59 |        10.19
+     3 |         9.44 |        10.16
+     4 |         9.91 |        10.04
+     5 |         9.72 |        10.16
+average|         9.64 |        10.14   Boncz / tuner = 0.95
+every answer: 524288 matches, checksum 884915f6528a6bfd (correct)
