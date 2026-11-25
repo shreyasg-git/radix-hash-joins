@@ -276,7 +276,8 @@ Run `runs/apple-m5_2026-11-26_050245_step3/`, 11.7 seconds. ns per row:
   cuts in the timed joins had to count: on this data every cut fitted his
   equal first shares, so each read its input once.
 - At the paper's formula, Boncz's join was slower than the tuner's pick in
-  40 of 40 rounds. Most of that is the paper's second pass, as in the race.
+  40 of 40 rounds. In the race, the paper's second pass was the whole gap
+  for the tuner's join; whether it is for Boncz's join, this run does not test.
 - Why Boncz's join loses at 16M rows has not been tested. One difference at
   that size: his box and link entries are 8 bytes, the tuner's 4.
 - The tuner's picks were found for the tuner's join, not for Boncz's. Step
