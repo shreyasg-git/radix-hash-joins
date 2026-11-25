@@ -1,0 +1,15 @@
+cpu: Apple M5
+priority: macOS cannot pin threads; highest QoS class (prefers performance cores)
+rows per table: 1048576, repeats: 5
+
+repeat | whole BATjoin | split: build (BAThash) + look up (BATjoin) = total
+     1 |    56.59 ns     |    12.77 +    26.48 =    39.25 ns per row
+     2 |    40.30 ns     |    12.28 +    25.95 =    38.23 ns per row
+     3 |    41.04 ns     |    11.86 +    25.87 =    37.73 ns per row
+     4 |    39.55 ns     |    12.52 +    25.75 =    38.27 ns per row
+     5 |    40.92 ns     |    12.53 +    26.10 =    38.63 ns per row
+average|    43.68 ns     |    12.39 +    26.03 =    38.42 ns per row
+
+method MonetDB reported, whole: "hashjoin using new hash; create hash"
+method MonetDB reported, split: "hashjoin using existing hash"
+every answer: 524288 matches, checksum 884915f6528a6bfd (correct)

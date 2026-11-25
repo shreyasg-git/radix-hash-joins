@@ -42,6 +42,7 @@ the number of matches and the checksum against the tuner's answer.
 |---|---|---|
 | 1 | Can our program call `BATjoin` at all? 10 rows. | Same 5 matches and checksum as the tuner's nested-loop join |
 | 2 | One join at 1,048,576 rows: which method MonetDB picks, one timing | Hash join, hash table on R (as the tuner). 40.70 ns per row against the tuner's 9.95 (one run each) |
+| 3 | Where MonetDB's time goes: building the hash table against looking up | Looking up is 68% at 1M rows and 73% at 16M rows; it slows down 2.25x from 1M to 16M rows |
 
 ### Step 1: call MonetDB's join on 10 rows
 
@@ -84,3 +85,36 @@ One difference to keep in mind: MonetDB's join writes out every matching
 pair (two lists of 524,288 row positions) and makes its hash table's memory
 during the join; the tuner's join adds each pair to the checksum straight
 away and reuses memory it set up before the clock starts.
+
+### Step 3: building the hash table against looking up
+
+```
+cd exp1-monetdb-join && make step3 && ./bin/step3             # 1,048,576 rows, 5 repeats
+./bin/step3 16777216 3                                         # 16,777,216 rows, 3 repeats
+```
+
+MonetDB's hash join does two jobs: build a hash table on R, then look up
+every row of S in it. `BAThash` builds the same table on its own, so the
+step times it, then times `BATjoin`, which then reports
+"hashjoin using existing hash" (only looking up). For comparison, the whole
+`BATjoin` on new columns reports "hashjoin using new hash; create hash".
+Every repeat uses new columns; the two kinds alternate; every answer is
+checked. Output: `runs/step3_1048576.txt`, `runs/step3_16777216.txt`.
+
+| Average, ns per row | 1,048,576 rows (5 repeats) | 16,777,216 rows (3 repeats) | 16M ÷ 1M |
+|---|---|---|---|
+| build (`BAThash`) | 12.39 | 21.82 | 1.76 |
+| look up (`BATjoin` with the table there) | 26.03 | 58.68 | 2.25 |
+| build + look up | 38.42 | 80.50 | 2.10 |
+| whole `BATjoin` | 43.68 | 82.97 | 1.90 |
+
+- At 16,777,216 rows the hash table is about 211 MB (boxes 19,173,961 × 4
+  bytes = 77 MB, links 16,777,216 × 4 bytes = 67 MB, keys 67 MB), against a
+  16 MB second cache, so most lookups wait for main memory. This is the case
+  the radix join was made for.
+- The first whole join at 1M rows took 56.59 ns per row against 39.55 to
+  41.04 for the other four: the program's first join pays one-time costs.
+  Step 4 runs an untimed warm-up first, as the race does.
+- For scale, the tuner's pick took 11.69 ns per row at 16,777,216 rows in the
+  race (`../tuner/paper-race/`); MonetDB's whole join here is 7.1 times that.
+  Step 4 measures both in the same program.
