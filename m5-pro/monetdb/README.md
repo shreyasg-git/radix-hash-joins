@@ -198,6 +198,7 @@ overlapping `memcpy`.
 |---|---|---|
 | 1 | Does the copy give right answers? 12 sizes, every setting | 486 of 486 right |
 | 2 | One size (1,048,576 rows), same bits and passes as the tuner's pick, 5 repeats | Boncz's join 9.64 ns per row, the tuner's 10.14: Boncz 5% faster, in 5 of 5 repeats |
+| 3 | 4 sizes, 10 shuffled rounds: tuner's join, Boncz's at the tuner's bits, Boncz's at the paper's formula | Boncz at the tuner's bits: 0.93x to 0.98x the tuner's time up to 8M rows, 1.03x at 16M. Boncz at the paper's formula: 1.14x to 1.34x, slower in 40 of 40 rounds |
 
 ### Step 1: right answers, nothing timed
 
@@ -245,3 +246,38 @@ so each read its input once; the tuner's cut always reads its input twice
 numbers, and his mixer puts exactly as many of them in every piece. With
 uneven keys his cut would have to count as well. One size, one setting, 5
 repeats: not yet a result.
+
+### Step 3: three settings at 4 sizes, measured like the race
+
+```
+cd exp2-boncz-radix && ./run.sh                    # about 12 seconds on the Apple M5
+python3 summarize.py runs/<folder>                  # writes summary.csv, prints the table
+./run.sh --quick                                    # checks that everything works; not a result
+```
+
+The race's rules: the tuner's data, 1 untimed warm-up per setting, then 10
+rounds, each running the three settings once in a newly shuffled order;
+every answer checked. Settings per size, from the race's plan:
+- **tuner**: the tuner's join at its pick;
+- **boncz-tuner**: Boncz's join at the same bits and passes (his own rows-per-box rule);
+- **boncz-paper**: Boncz's join at the paper's formula (bits from page 63, passes from page 60).
+
+Run `runs/apple-m5_2026-11-26_050245_step3/`, 11.7 seconds. ns per row:
+
+| Rows per table | Tuner's join | Boncz at the tuner's bits | Boncz ÷ tuner (rounds Boncz faster) | Boncz at the paper's formula | Boncz-paper ÷ tuner (rounds faster) |
+|---|---|---|---|---|---|
+| 1,048,576 | 11 bits, 1 pass: 9.35 (9.18 to 9.58) | 8.69 (8.49 to 8.97) | 0.93 (10 of 10) | 7 bits, 2 passes: 12.50 (12.35 to 13.04) | 1.34 (0 of 10) |
+| 4,194,304 | 12 bits, 1 pass: 9.64 (9.50 to 9.88) | 9.23 (9.02 to 9.52) | 0.96 (10 of 10) | 9 bits, 2 passes: 11.31 (11.25 to 11.41) | 1.17 (0 of 10) |
+| 8,388,608 | 12 bits, 1 pass: 10.19 (10.08 to 10.49) | 9.95 (9.59 to 10.94) | 0.98 (8 of 10) | 10 bits, 2 passes: 11.63 (11.45 to 11.93) | 1.14 (0 of 10) |
+| 16,777,216 | 10 bits, 1 pass: 10.45 (10.34 to 10.61) | 10.78 (10.69 to 11.15) | 1.03 (0 of 10) | 11 bits, 2 passes: 12.34 (12.13 to 12.57) | 1.18 (0 of 10) |
+
+- At the tuner's bits and passes, Boncz's 2007 join was faster than the
+  tuner's join up to 8,388,608 rows and slower at 16,777,216. None of his
+  cuts in the timed joins had to count: on this data every cut fitted his
+  equal first shares, so each read its input once.
+- At the paper's formula, Boncz's join was slower than the tuner's pick in
+  40 of 40 rounds. Most of that is the paper's second pass, as in the race.
+- Why Boncz's join loses at 16M rows has not been tested. One difference at
+  that size: his box and link entries are 8 bytes, the tuner's 4.
+- The tuner's picks were found for the tuner's join, not for Boncz's. Step
+  4 is to let the tuner search Boncz's own settings.

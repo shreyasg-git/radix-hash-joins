@@ -1,0 +1,16 @@
+tuner_spec=1
+boncz_source=MonetDB5/src/modules/mal/radix.mx at 33a91903a7 (2007-09-12)
+date=2026-11-26 05:02:57
+cpu=Apple M5
+os=Darwin 25.6.0 arm64
+logical_cpus=10
+ram_bytes=34359738368
+compiler=Apple LLVM 21.0.0 (clang-2100.1.1.101)
+thread=macOS cannot pin threads; highest QoS class (prefers performance cores)
+rounds=10
+warmup=1 untimed join per setting
+seconds_1048576=0.4
+seconds_4194304=1.5
+seconds_8388608=3.1
+seconds_16777216=6.7
+seconds_total=11.7
