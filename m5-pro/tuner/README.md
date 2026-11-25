@@ -71,3 +71,11 @@ The space is small enough to measure instead of guess:
 - Learned rule: aim for about 2,048 rows of R per piece. The held-out check at
   8,388,608 rows: the rule chose 12 bits, and the fastest was 11 bits. The
   rule's choice took 1.002 times as long, a tie.
+
+## Against the paper's formula
+
+`paper-race/` times the tuner's settings against the settings from the
+paper's formulas, with the same join code, 10 rounds each. On the M5
+(2026-11-24) the paper's formula took 1.27 to 1.51 times as long, all of it
+from its rule of at most 6 bits per pass; the paper's bits in 1 pass tied with
+the tuner. See `paper-race/README.md`.

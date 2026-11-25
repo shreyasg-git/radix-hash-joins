@@ -1,0 +1,3 @@
+bin/
+runs/*_quick/
+__pycache__/

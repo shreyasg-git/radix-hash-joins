@@ -1,0 +1,16 @@
+tuner_spec=1
+date=2026-11-24 12:02:11
+cpu=Apple M5
+os=Darwin 25.6.0 arm64
+logical_cpus=10
+ram_bytes=34359738368
+compiler=Apple LLVM 21.0.0 (clang-2100.1.1.101)
+thread=macOS cannot pin threads; highest QoS class (prefers performance cores)
+rounds=10
+warmup=1 untimed join per setting
+skipped_sizes=none
+seconds_1048576=0.9
+seconds_4194304=3.6
+seconds_8388608=7.4
+seconds_16777216=14.4
+seconds_total=26.3

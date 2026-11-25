@@ -173,6 +173,9 @@ The CSV files are plain text with a header row, so any tool can read them.
 `artifacts/work-record.html` lists everything done in this folder on 22 and
 23 November: every change, every result and the file that backs each one.
 
+`artifacts/tuner.html` explains the tuner, how correct and fair it is, the
+paper's formulas worked out for the M5, and the race against them.
+
 `artifacts/` also holds the two web pages made from these results. Double-click a
 file to open it in a browser; no login or server is needed. The fonts load
 from Google Fonts when online; offline the pages fall back to the system font.

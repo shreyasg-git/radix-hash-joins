@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Radix Join Tuner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one reading column (~70ch) with full-width panels for tables and charts; same look as the project's other pages. */
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --surface-2: #eceff3; --line: #d9dee5;
+  --fg: #131820; --fg-2: #47505d; --muted: #6a7280;
+  --accent: #2a78d6;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+  --good-bg: #dff3ea; --good-fg: #11674a; --warn-bg: #fbeedd; --warn-fg: #8a4b0f; --bad-bg: #fbe3e1; --bad-fg: #9b2a22;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111317; --surface: #191c21; --surface-2: #23272e; --line: #30353d;
+    --fg: #eef0f3; --fg-2: #b8bfc9; --muted: #8b939e;
+    --accent: #5b9cec; --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+    --good-bg: #123a2c; --good-fg: #7fdcb4; --warn-bg: #3e2a12; --warn-fg: #f2bd7d; --bad-bg: #42191a; --bad-fg: #f3a39c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111317; --surface: #191c21; --surface-2: #23272e; --line: #30353d;
+  --fg: #eef0f3; --fg-2: #b8bfc9; --muted: #8b939e;
+  --accent: #5b9cec; --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+  --good-bg: #123a2c; --good-fg: #7fdcb4; --warn-bg: #3e2a12; --warn-fg: #f2bd7d; --bad-bg: #42191a; --bad-fg: #f3a39c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 30px; }
+.col { max-width: 70ch; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 2.9rem); font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 1.55rem; font-weight: 600; letter-spacing: -0.01em; }
+h3 { font-size: 1.08rem; font-weight: 600; }
+p { margin: 0; }
+section { scroll-margin-top: 16px; }
+.stack { display: grid; gap: 14px; }
+.eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 1.15rem; color: var(--fg-2); }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.simple { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; display: grid; gap: 8px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: grid; gap: 16px; min-width: 0; }
+.design { display: grid; grid-template-columns: 10rem 1fr; border-top: 1px solid var(--line); }
+.design > div { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--line); font-size: 0.95rem; min-width: 0; }
+.design > div:nth-child(odd) { font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding-top: 11px; }
+@media (max-width: 560px) { .design { grid-template-columns: 1fr; } .design > div:nth-child(odd) { border-bottom: 0; padding-bottom: 0; } }
+.result { background: var(--surface-2); border-radius: 8px; padding: 14px 16px; display: grid; gap: 8px; }
+.result .k { font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.pick td { background: var(--surface-2); }
+.tablewrap { overflow-x: auto; min-width: 0; }
+.note { font-size: 0.85rem; color: var(--muted); }
+ul.clean, ol.clean { margin: 0; padding-left: 1.2rem; display: grid; gap: 8px; }
+.toc { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 4px 20px; margin: 0; padding: 0; list-style: none; counter-reset: toc; font-size: 0.95rem; }
+.toc li { counter-increment: toc; display: flex; gap: 8px; }
+.toc li::before { content: counter(toc); font-family: var(--mono); font-size: 0.8rem; color: var(--muted); min-width: 1.4rem; padding-top: 2px; }
+.words { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.word { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: var(--surface); display: grid; gap: 4px; align-content: start; }
+.word b { font-size: 0.98rem; }
+.word p { font-size: 0.92rem; color: var(--fg-2); }
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.flow div { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: var(--surface-2); font-size: 0.9rem; display: grid; gap: 4px; align-content: start; }
+.flow div b { font-size: 0.95rem; }
+.flow div i { font-style: normal; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+.formula { font-family: var(--mono); font-size: 1.02rem; background: var(--surface-2); border-radius: 8px; padding: 12px 16px; overflow-x: auto; white-space: nowrap; }
+.steps { margin: 0; padding-left: 1.4rem; display: grid; gap: 6px; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; font-size: 0.78rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.tag.good { background: var(--good-bg); color: var(--good-fg); }
+.tag.warn { background: var(--warn-bg); color: var(--warn-fg); }
+.tag.bad { background: var(--bad-bg); color: var(--bad-fg); }
+.verdict { border: 1px solid var(--line); border-left: 4px solid var(--warn-fg); border-radius: 8px; padding: 14px 16px; background: var(--surface); display: grid; gap: 8px; }
+.chart { width: 100%; overflow-x: auto; }
+.chart svg { display: block; width: 100%; height: auto; min-width: 520px; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.82rem; color: var(--fg-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 0; border-top: 2px solid; display: inline-block; }
+.sw.dash { border-top-style: dashed; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { font: inherit; font-size: 0.85rem; font-family: var(--mono); padding: 5px 11px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg-2); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+details summary { cursor: pointer; font-size: 0.88rem; color: var(--accent); }
+details[open] summary { margin-bottom: 8px; }
+#tip { position: fixed; pointer-events: none; background: var(--fg); color: var(--bg); font-size: 0.8rem; padding: 7px 10px; border-radius: 6px; font-family: var(--mono); z-index: 20; line-height: 1.45; }
+footer { font-size: 0.85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="stack col">
+    <div class="eyebrow">Radix hash join project · Apple M5 MacBook Pro · tuner rules version 1 · run of 23 November 2026</div>
+    <h1>Radix Join Tuner</h1>
+    <p class="lede">How the tuner picks the radix join's 3 settings, what it found on the M5, how correct and fair it is, and the paper's formulas for the same settings worked out for this Mac.</p>
+  </header>
+
+  <section class="simple col" aria-label="Short version">
+    <p><b>Short version.</b></p>
+    <ul class="clean">
+      <li>The tuner times the radix join at hundreds of settings on the computer it runs on and keeps the fastest. It never reads the computer's cache sizes.</li>
+      <li>On the M5 it ran 937 timed joins in 2 minutes 0 seconds. The fastest setting at every size was 1 pass and 1/8 row per box, with 10 to 12 bits: 9.92 to 11.00 ns per row.</li>
+      <li>It is correct: every timed join's answer was checked, and its 191,213-check self-test passes.</li>
+      <li>It has 5 weak points in fairness. The biggest: its "2.68 times as fast as no cutting" compares against a no-cutting join that was never tuned. With both joins at 1/8 row per box, the gain was 1.89 times.</li>
+      <li>The paper gives formulas for bits and passes, and none for rows per box. In a 10-round race on 24 November, with the same code and the same rows per box on both sides, the paper's formula took 1.27 to 1.51 times as long as the tuner's pick and lost all 40 of 40 rounds.</li>
+      <li>All of that gap comes from the paper's passes rule, filled in with its 1999 computer's 64-entry page-address list. The paper's bits in 1 pass tied with the tuner at all 4 sizes.</li>
+    </ul>
+  </section>
+
+  <nav class="stack" aria-label="Contents">
+    <h2>On this page</h2>
+    <ol class="toc">
+      <li><a href="#words">Words used on this page</a></li>
+      <li><a href="#settings">What the tuner changes and keeps fixed</a></li>
+      <li><a href="#search">How it searches</a></li>
+      <li><a href="#results">What it found on the M5</a></li>
+      <li><a href="#rule">The rule it learned, and the check</a></li>
+      <li><a href="#correct">Is it correct?</a></li>
+      <li><a href="#fair">Is it fair?</a></li>
+      <li><a href="#limits">All the limits</a></li>
+      <li><a href="#formulas">The paper's formulas, worked out for the M5</a></li>
+      <li><a href="#picks">How the paper's picks ran on the M5</a></li>
+      <li><a href="#race">The race: formula against tuner</a></li>
+      <li><a href="#beat">Did we beat the paper?</a></li>
+      <li><a href="#next">What would make it airtight</a></li>
+      <li><a href="#files">Files and commands</a></li>
+    </ol>
+  </nav>
+
+  <!-- ===================== 1 Words ===================== -->
+  <section id="words" class="stack">
+    <div class="col stack"><h2>Words used on this page</h2></div>
+    <div class="words">
+      <div class="word"><b>Radix join</b><p>The join from the paper. It first cuts tables R and S into pieces by the last few bits of each key's hash number, so matching rows land in pieces with the same number. Then it joins piece by piece, each with a small hash table.</p></div>
+      <div class="word"><b>Radix bits</b><p>How many bits choose the piece. B bits give 2<sup>B</sup> pieces: 10 bits give 1,024 pieces. 0 bits means no cutting: one big hash table on all of R.</p></div>
+      <div class="word"><b>Pass</b><p>One trip through a whole table to cut it. With 2 passes, 12 bits are cut as 6 + 6: first into 64 pieces, then each of those into 64 more.</p></div>
+      <div class="word"><b>Rows per box</b><p>How full each piece's hash table is. 1/8 means 8 boxes for every row; 4 means 1 box for every 4 rows. The code calls a box a "bucket".</p></div>
+      <div class="word"><b>ns per row</b><p>The time of one whole join in nanoseconds (billionths of a second), divided by the rows in one table. Lower is faster.</p></div>
+      <div class="word"><b>Median</b><p>The middle value of the runs: half were faster, half slower. One very slow run cannot move it.</p></div>
+      <div class="word"><b>Tie</b><p>Two settings tie when the fastest run of one was faster than the slowest run of the other.</p></div>
+      <div class="word"><b>log2</b><p>How many times you double 1 to reach a number. log2(1,024) = 10, because 2<sup>10</sup> = 1,024. log2(1,536) = 10.585, between 10 and 11.</p></div>
+      <div class="word"><b>Page-address list (TLB)</b><p>A short list inside the processor of recently used memory-page addresses. A write to a page not on the list waits while the processor looks the address up.</p></div>
+    </div>
+  </section>
+
+  <!-- ===================== 2 Settings ===================== -->
+  <section id="settings" class="stack">
+    <div class="col stack"><h2>What the tuner changes and keeps fixed</h2>
+      <p>The rules are written down in <code>tuner/SPEC.md</code> as version 1. Changing any fixed item means a version 2, and results of different versions are never compared; the report program refuses to.</p></div>
+    <div class="panel">
+      <h3>The 3 settings it changes</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Setting</th><th>Values tried</th><th>Why the range ends there</th></tr></thead>
+        <tbody>
+          <tr><td>Radix bits</td><td>0 to 18</td><td>Never so many that a piece holds fewer than about 16 rows: at most 16 bits at 1,048,576 rows, 18 at 4,194,304 and 16,777,216.</td></tr>
+          <tr><td>Passes</td><td>1, 2, 3</td><td>Never more passes than bits.</td></tr>
+          <tr><td>Rows per box</td><td>1/8, 1/4, 1/2, 1, 2, 4</td><td>Set in version 1. 1/8 won at every size, so a smaller value might be faster.</td></tr>
+        </tbody>
+      </table></div>
+      <h3>What stays the same in every run</h3>
+      <div class="design">
+        <div>Data</div><div>N rows in each table. R's keys are 0 to N−1; S's keys are 0, 2, 4, …, so exactly half of S finds a match. Both shuffled with seed 42. A row is 8 bytes: a 4-byte key and a 4-byte row number.</div>
+        <div>Join code</div><div>A copy of experiment 4's radix join, with the same hash function <code>mix</code>. The bits are split evenly over the passes; earlier passes get the extra bit.</div>
+        <div>Score</div><div>Time of one whole join divided by N: cutting R, cutting S, building every piece's table and looking up every row of S. Emptying the boxes is counted. Matches are counted, not written out.</div>
+        <div>Timing</div><div>All memory is set up before the clock starts. One clock read before the join and one after, nothing in between.</div>
+        <div>Thread</div><div>1 thread. On macOS, the highest priority class (macOS cannot keep a thread on one core). On Linux, kept on the core it starts on.</div>
+        <div>Sizes</div><div>Learns at 1,048,576, 4,194,304 and 16,777,216 rows. Checks at 8,388,608 rows. A size that needs more than a quarter of the memory is skipped; 16,777,216 rows needs about 1.4 GB.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 3 Search ===================== -->
+  <section id="search" class="stack">
+    <div class="col stack"><h2>How it searches</h2>
+      <p>At each of the 3 learning sizes it narrows down in stages. Each round runs every setting of a stage once, in a newly shuffled order, so a slow moment of the laptop lands on different settings each time.</p></div>
+    <div class="panel">
+      <div class="flow">
+        <div><i>Before timing</i><b>Warm-up</b>2 joins, not timed.</div>
+        <div><i>Stage A · 3 rounds</i><b>The curve</b>Every bits-and-passes pair, plus no cutting, all at 1/2 row per box. 46 settings at 1,048,576 rows; 52 at the 2 larger sizes.</div>
+        <div><i>Stage B · 3 rounds</i><b>Rows per box</b>The 4 fastest pairs from stage A, each with all 6 rows-per-box values: 24 settings.</div>
+        <div><i>Stage C · 11 rounds</i><b>Final race</b>The 5 fastest from stage B, plus no cutting at 1/2 and stage A's winner: 7 settings. The lowest median wins.</div>
+        <div><i>After all 3 sizes</i><b>Rule</b>From the 3 winners, learns how many rows one piece should hold.</div>
+        <div><i>5 rounds</i><b>Check</b>At 8,388,608 rows, a size it did not learn from: the rule's setting, 3 bits fewer to 3 more, and no cutting.</div>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Part of the run</th><th class="num">Timed joins</th></tr></thead>
+        <tbody>
+          <tr><td>Stage A (46 + 52 + 52 settings × 3 rounds)</td><td class="num">450</td></tr>
+          <tr><td>Stage B (24 settings × 3 rounds × 3 sizes)</td><td class="num">216</td></tr>
+          <tr><td>Stage C (7 settings × 11 rounds × 3 sizes)</td><td class="num">231</td></tr>
+          <tr><td>Check at 8,388,608 rows (8 settings × 5 rounds)</td><td class="num">40</td></tr>
+          <tr><td><b>Total</b></td><td class="num"><b>937</b></td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">Time on the M5: 4.5 s at 1,048,576 rows, 20.7 s at 4,194,304, 90.5 s at 16,777,216, 4.6 s for the check; 120.3 s in total.</p>
+    </div>
+  </section>
+
+  <!-- ===================== 4 Results ===================== -->
+  <section id="results" class="stack">
+    <div class="col stack"><h2>What it found on the M5</h2></div>
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Stage A · 1/2 row per box · median of 3 runs</div>
+        <h3>Time per row against radix bits</h3></div>
+      <div class="seg" role="group" aria-label="Rows per table">
+        <button type="button" id="sz-1048576" data-n="1048576" aria-pressed="false">1,048,576 rows</button>
+        <button type="button" id="sz-4194304" data-n="4194304" aria-pressed="false">4,194,304 rows</button>
+        <button type="button" id="sz-16777216" data-n="16777216" aria-pressed="true">16,777,216 rows</button>
+      </div>
+      <div class="legend" id="lg-curve"></div>
+      <div class="chart" id="ch-curve"></div>
+      <details><summary>Show the numbers</summary><div class="tablewrap" id="tb-curve"></div></details>
+      <div class="result"><span class="k">What the curve shows</span>
+        <ul class="clean">
+          <li>The bottom is flat. At 16,777,216 rows, 1 pass took 12.65 to 13.22 ns per row anywhere from 9 to 12 bits.</li>
+          <li>1 pass was fastest at every size. At 16,777,216 rows and 12 bits: 12.65 ns in 1 pass, 15.34 in 2 passes, 19.17 in 3.</li>
+          <li>No cutting took 32.95 ns per row at 16,777,216 rows in this stage.</li>
+        </ul></div>
+    </div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Stage B · each size's winning bits, 1 pass · median of 3 runs</div>
+        <h3>Time per row against rows per box</h3></div>
+      <div class="legend" id="lg-load"></div>
+      <div class="chart" id="ch-load"></div>
+      <details><summary>Show the numbers</summary><div class="tablewrap" id="tb-load"></div></details>
+      <div class="result"><span class="k">What the chart shows</span>
+        <ul class="clean">
+          <li>The emptier the boxes, the faster, all the way to 1/8, the smallest value version 1 tries.</li>
+          <li>4 rows per box took 1.70 to 1.91 times as long as 1/8 at the same bits, across all 12 bits-and-size pairs stage B tried.</li>
+          <li>In stage C, each size's winner at 1/8 was 1.19, 1.19 and 1.14 times as fast as stage A's winner at 1/2.</li>
+        </ul></div>
+    </div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Stage C · 11 runs each</div><h3>The winners</h3></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Rows per table</th><th>Fastest setting</th><th class="num">ns per row</th><th class="num">Fastest to slowest run</th><th>Tied with it (bits, rows per box; all 1 pass)</th><th class="num">No cutting at 1/2</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1,048,576</td><td>11 bits, 1 pass, 1/8</td><td class="num">9.92</td><td class="num">9.73 to 10.17</td><td>9, 10, 12 bits at 1/8</td><td class="num">17.05</td></tr>
+          <tr><td class="num">4,194,304</td><td>12 bits, 1 pass, 1/8</td><td class="num">10.27</td><td class="num">9.97 to 10.93</td><td>11, 13 bits at 1/8; 10, 11 bits at 1/4</td><td class="num">26.54</td></tr>
+          <tr><td class="num">16,777,216</td><td>10 bits, 1 pass, 1/8</td><td class="num">11.00</td><td class="num">10.74 to 11.38</td><td>9, 11, 12 bits at 1/8; 12 bits at 1/4</td><td class="num">29.46</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">The tuner reports the winner as 1.72, 2.58 and 2.68 times as fast as no cutting. Section 7 explains why those numbers are too high.</p>
+    </div>
+  </section>
+
+  <!-- ===================== 5 Rule ===================== -->
+  <section id="rule" class="stack">
+    <div class="col stack"><h2>The rule it learned, and the check</h2></div>
+    <div class="panel">
+      <h3>How the rule is worked out</h3>
+      <ol class="steps">
+        <li>Rows per piece for each winner: 1,048,576 ÷ 2<sup>11</sup> = 512 = 2<sup>9</sup>; 4,194,304 ÷ 2<sup>12</sup> = 1,024 = 2<sup>10</sup>; 16,777,216 ÷ 2<sup>10</sup> = 16,384 = 2<sup>14</sup>.</li>
+        <li>Average the powers: (9 + 10 + 14) ÷ 3 = 11.</li>
+        <li>2<sup>11</sup> = <b>2,048 rows per piece</b>.</li>
+        <li>Passes and rows per box: the value that won most often. 1 pass and 1/8 won at all 3 sizes.</li>
+      </ol>
+      <div class="formula">bits = round(log2(rows ÷ 2,048)), 1 pass, 1/8 row per box</div>
+      <p>At 8,388,608 rows: 8,388,608 ÷ 2,048 = 4,096, and log2(4,096) = 12, so the rule picks 12 bits.</p>
+      <h3>The check at 8,388,608 rows (5 runs each, all 1 pass, 1/8 row per box)</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Bits</th><th class="num">ns per row</th><th class="num">Fastest to slowest run</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td class="num">9</td><td class="num">10.87</td><td class="num">10.85 to 11.45</td><td>tied</td></tr>
+          <tr><td class="num">10</td><td class="num">10.92</td><td class="num">10.72 to 18.49</td><td>tied</td></tr>
+          <tr><td class="num">11</td><td class="num">10.75</td><td class="num">10.73 to 11.03</td><td><b>fastest</b></td></tr>
+          <tr class="pick"><td class="num">12</td><td class="num">10.78</td><td class="num">10.66 to 18.69</td><td>tied · the rule's pick, 1.002 times the fastest</td></tr>
+          <tr><td class="num">13</td><td class="num">10.79</td><td class="num">10.67 to 10.96</td><td>tied</td></tr>
+          <tr><td class="num">14</td><td class="num">11.07</td><td class="num">10.89 to 11.29</td><td>tied</td></tr>
+          <tr><td class="num">15</td><td class="num">11.36</td><td class="num">11.27 to 11.59</td><td>not tied, 1.057 times the fastest</td></tr>
+          <tr><td class="num">0 (no cutting)</td><td class="num">20.33</td><td class="num">20.29 to 23.86</td><td>1.89 times the fastest</td></tr>
+        </tbody>
+      </table></div>
+      <div class="result"><span class="k">What the check shows</span>
+        <p>The rule's pick tied with the fastest. So did 6 of the 7 settings tried, from 9 to 14 bits. The check proves the rule lands on the flat bottom of the curve, which is wide. It does not prove the rule is precise.</p></div>
+    </div>
+  </section>
+
+  <!-- ===================== 6 Correct ===================== -->
+  <section id="correct" class="stack">
+    <div class="col stack"><h2>Is it correct?</h2>
+      <p>Yes, on every check available.</p></div>
+    <div class="panel">
+      <div class="tablewrap"><table>
+        <thead><tr><th>Check</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td>Every timed join's answer: number of matches plus a fingerprint of every matched pair, against the known answer. A wrong answer stops the tuner.</td><td><span class="tag good">937 of 937 right</span></td></tr>
+          <tr><td>Self-test against a slow method that compares every row with every row: settings from 0 to 8 bits, 1 to 3 passes, all 6 rows-per-box values, tables with repeated keys; cutting checked from 1 to 12 bits.</td><td><span class="tag good">191,213 checks pass</span></td></tr>
+          <tr><td>The same self-test under the memory-error and undefined-behaviour checkers (<code>make check</code>), rerun on 24 November.</td><td><span class="tag good">passes</span></td></tr>
+          <tr><td>Clock step against join length: the M5's clock moves in 41.7 ns steps; the shortest join takes about 10 ms.</td><td><span class="tag good">0.0004% of a join</span></td></tr>
+          <tr><td>Nothing else inside the timer: no clock reads, no memory setup.</td><td><span class="tag good">clean</span></td></tr>
+          <tr><td>Slow moments: runs that took more than 1.5 times their setting's median.</td><td>10 of 937; the worst took 2.21 times. Medians are used, so they cannot pick the winner.</td></tr>
+          <tr><td>Spread of each winner's 11 runs, slowest minus fastest, as a share of its median.</td><td>4.5%, 9.3%, 5.8%</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- ===================== 7 Fair ===================== -->
+  <section id="fair" class="stack">
+    <div class="col stack"><h2>Is it fair?</h2>
+      <p>Mostly. These are the 5 weak points, largest first.</p></div>
+    <div class="panel">
+      <div class="design">
+        <div>1 · No-cutting join never tuned</div><div>No cutting was timed only at 1/2 row per box, while the radix join got its best box setting. In experiment 6, the no-cutting join at 1/2 took 1.40 times as long as its own best at 4,194,304 rows and 1.29 times at 16,777,216. In the check at 8,388,608 rows, where both joins used 1/8, the radix join was <b>1.89 times</b> as fast as no cutting, against 2.58 and 2.68 at the learning sizes.</div>
+        <div>2 · The check is easy to pass</div><div>6 of the 7 bits tried at 8,388,608 rows tied with the fastest; the worst, 15 bits, took 5.7% longer. The check also varied only the bits, never passes or rows per box.</div>
+        <div>3 · The rule averages winners that disagree</div><div>The 3 winners mean 512, 1,024 and 16,384 rows per piece, a factor of 32 apart. The rule of 2,048 works because so many settings tie, not because 2,048 is a sharp best.</div>
+        <div>4 · Stage B assumes the best bits do not depend on rows per box</div><div>Stage A picks the top 4 bit settings at 1/2 row per box only. At 1/8 each piece's table is 4 times larger, so the best bits could move. At 16,777,216 rows, 13 bits at 1/8 was never tried. At 8,388,608 rows it was, and it tied (10.79 against 10.75 ns), so this probably cost nothing here.</div>
+        <div>5 · "Tie" is a loose test</div><div>Overlapping fastest-to-slowest ranges. One slow run in the winner's 11 is enough to make almost every setting tie with it.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 8 Limits ===================== -->
+  <section id="limits" class="stack col">
+    <h2>All the limits</h2>
+    <ul class="clean">
+      <li><b>One run.</b> The tuner ran once, on one machine. Whether a second run picks the same bits is unknown; with this many ties it could pick anything from 9 to 12.</li>
+      <li><b>One thread.</b> Experiment 5 showed more threads change the timings.</li>
+      <li><b>One data set.</b> Unique keys, both tables the same size, half of S matching, 8-byte rows, one shuffle. No repeated or uneven keys in the timed data.</li>
+      <li><b>Sizes.</b> 1, 4 and 16 million rows, checked at 8 million. Nothing smaller or larger.</li>
+      <li><b>Ranges.</b> 1/8 row per box is the smallest value tried and won at every size. Bits stop at 18, passes at 3.</li>
+      <li><b>Fixed choices.</b> Bits always split evenly over the passes; the hash function is always <code>mix</code>.</li>
+      <li><b>Result rows.</b> Matches are counted, not written out.</li>
+      <li><b>Cores.</b> macOS cannot keep the thread on one core, so it may move between the 4 fast cores and the 6 slower ones. The slower cores have 64 KB and 6 MB caches instead of 128 KB and 16 MB.</li>
+      <li><b>No "why".</b> macOS hides the processor's cache-miss counters, so the tuner says which setting is fastest, not why.</li>
+      <li><b>Linux.</b> The Linux code path has never been compiled or run.</li>
+      <li><b>Order.</b> The shuffle seed is fixed, so every run uses the same order: repeatable, but not independent.</li>
+      <li><b>Selection bias.</b> The winner's time comes from the same 11 runs that picked it, which flatters it slightly. The check at 8,388,608 rows is the only fresh measurement.</li>
+      <li><b>Stale comment.</b> <code>tune.sh</code> says a run takes "about 3 minutes"; the run took 2 minutes 0 seconds.</li>
+    </ul>
+  </section>
+
+  <!-- ===================== 9 Formulas ===================== -->
+  <section id="formulas" class="stack">
+    <div class="col stack"><h2>The paper's formulas, worked out for the M5</h2>
+      <p>Boncz, Manegold and Kersten, "Database Architecture Optimized for the New Bottleneck: Memory Access", VLDB 1999, pages 54 to 65. The paper gives formulas for radix bits and passes. It gives none for rows per box. Every M5 number below was read from macOS (<code>sysctl</code>).</p></div>
+
+    <div class="panel">
+      <h3>The inputs</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Input</th><th class="num">Paper's computer (1999)</th><th class="num">M5, fast cores</th></tr></thead>
+        <tbody>
+          <tr><td>Machine</td><td class="num">SGI Origin2000, 250 MHz</td><td class="num">Apple M5</td></tr>
+          <tr><td>First cache (L1)</td><td class="num">32 KB</td><td class="num">131,072 bytes (128 KiB)</td></tr>
+          <tr><td>Second cache (L2)</td><td class="num">4 MB</td><td class="num">16,777,216 bytes (16 MiB)</td></tr>
+          <tr><td>Block the cache copies at a time</td><td class="num">32 B in L1, 128 B in L2</td><td class="num">128 bytes</td></tr>
+          <tr><td>Blocks that fit in L1</td><td class="num">1,024</td><td class="num">131,072 ÷ 128 = 1,024</td></tr>
+          <tr><td>Blocks that fit in L2</td><td class="num">32,768</td><td class="num">16,777,216 ÷ 128 = 131,072</td></tr>
+          <tr><td>Memory page</td><td class="num">16 KB</td><td class="num">16,384 bytes</td></tr>
+          <tr><td>Entries in the page-address list</td><td class="num">64</td><td class="num">not reported by macOS</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Formula 1 · page 63</div><h3>Radix bits: fit one piece in a cache</h3></div>
+      <div class="formula">B = log2(C × 12 ÷ cache size)</div>
+      <ul class="clean">
+        <li><b>C</b> is the number of rows in R, the table the hash table is built on.</li>
+        <li><b>12</b> is the bytes one row of R takes, counting its share of the hash table. The paper does not break the 12 down.</li>
+        <li>In plain words: cut R into just enough pieces that one piece plus its hash table fits in the chosen cache. The paper does not say how to round. To make the piece fit, round up.</li>
+      </ul>
+      <div class="result"><span class="k">Worked example · 16,777,216 rows · first cache</span>
+        <ol class="steps">
+          <li>All of R plus its table: 16,777,216 × 12 = 201,326,592 bytes.</li>
+          <li>How many caches' worth: 201,326,592 ÷ 131,072 = 1,536.</li>
+          <li>log2(1,536) = 10.585. Round up: <b>11 bits</b>, 2<sup>11</sup> = 2,048 pieces.</li>
+          <li>Check: 16,777,216 ÷ 2,048 = 8,192 rows per piece; 8,192 × 12 = 98,304 bytes, which fits in 131,072.</li>
+          <li>With 10 bits: 16,384 rows = 196,608 bytes, which does not fit.</li>
+        </ol></div>
+      <p>The paper gives 3 versions, one per kind of memory it could aim at:</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Rows (C)</th><th class="num">C × 12 bytes</th><th class="num">First cache: ÷ 131,072 → log2 → bits</th><th class="num">Second cache: ÷ 16,777,216 → log2 → bits</th><th class="num">Page list, 64 entries: ÷ 1,048,576 → log2 → bits</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1,048,576</td><td class="num">12,582,912</td><td class="num">96 → 6.585 → <b>7</b></td><td class="num">0.75 → −0.415 → <b>0</b></td><td class="num">12 → 3.585 → <b>4</b></td></tr>
+          <tr><td class="num">4,194,304</td><td class="num">50,331,648</td><td class="num">384 → 8.585 → <b>9</b></td><td class="num">3 → 1.585 → <b>2</b></td><td class="num">48 → 5.585 → <b>6</b></td></tr>
+          <tr><td class="num">8,388,608</td><td class="num">100,663,296</td><td class="num">768 → 9.585 → <b>10</b></td><td class="num">6 → 2.585 → <b>3</b></td><td class="num">96 → 6.585 → <b>7</b></td></tr>
+          <tr><td class="num">16,777,216</td><td class="num">201,326,592</td><td class="num">1,536 → 10.585 → <b>11</b></td><td class="num">12 → 3.585 → <b>4</b></td><td class="num">192 → 7.585 → <b>8</b></td></tr>
+        </tbody>
+      </table></div>
+      <ul class="clean">
+        <li>The first-cache version always gives pieces of 8,192 rows (96 KiB). The paper calls it "phash L1" and says it "really needs the multi-pass radix-cluster algorithm".</li>
+        <li>The second-cache version always gives pieces of 1,048,576 rows (12 MiB). At 1,048,576 rows the whole table already fits, so it says: do not cut.</li>
+        <li>The page-list version aims at the memory the list covers: entries × page size. With the paper's 64 entries that is 64 × 16,384 = 1,048,576 bytes. The M5's number of entries is unknown, so its true answer is unknown.</li>
+      </ul>
+    </div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Formula 2 · page 60</div><h3>Passes: at most 64 pieces per pass</h3></div>
+      <p>The paper: "Up to 6 bits, using just one pass yields the best performance. … With more than 6 bits, two passes perform better than one. … three passes should be used with more than 12 bits, and four passes with more than 18 bits. Thus, the number of clusters per pass is limited to at most the number of TLB entries (64)." It also says performance "strongly depend[s] on even distribution of bits".</p>
+      <div class="formula">P = bits ÷ log2(entries), rounded up · with 64 entries: P = bits ÷ 6, rounded up</div>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Rows</th><th class="num">First-cache bits</th><th class="num">÷ 6</th><th class="num">Passes</th><th class="num">Bits per pass</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1,048,576</td><td class="num">7</td><td class="num">1.17</td><td class="num">2</td><td class="num">4 + 3</td></tr>
+          <tr><td class="num">4,194,304</td><td class="num">9</td><td class="num">1.50</td><td class="num">2</td><td class="num">5 + 4</td></tr>
+          <tr><td class="num">8,388,608</td><td class="num">10</td><td class="num">1.67</td><td class="num">2</td><td class="num">5 + 5</td></tr>
+          <tr><td class="num">16,777,216</td><td class="num">11</td><td class="num">1.83</td><td class="num">2</td><td class="num">6 + 5</td></tr>
+        </tbody>
+      </table></div>
+      <ul class="clean">
+        <li>This uses the paper's 64, because macOS does not report the M5's number. If the M5's list holds at least 2,048 entries (2<sup>11</sup>), the same rule gives 1 pass at every size above.</li>
+        <li>The paper names a second limit: one pass slows down once it writes to more pieces than the second cache has blocks. Experiment 3 fits it on the M5. At 17 bits, 1 pass and 2 passes took about the same time (2.56 and 2.60 ns per row), and 2<sup>17</sup> = 131,072 is exactly the number of blocks in the M5's second cache. From 18 bits, 2 passes won. Without the cache-miss counters this match cannot be proven to be the cause.</li>
+      </ul>
+    </div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Formula 3</div><h3>Rows per box: no formula</h3></div>
+      <p>The paper never says how many boxes the hash table should have. Its time formulas assume "a bucket-chain length of 4" (page 62), which is about 4 rows per box, the same as Varun's rule in commit <code>d28429e</code>. Varun's commit gives no reason, so whether it came from the paper is unknown.</p>
+      <p>On the M5, 4 rows per box took 1.70 to 1.91 times as long as 1/8 at the same bits (tuner stage B).</p>
+    </div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">Two more numbers from the paper</div></div>
+      <div class="design">
+        <div>Its measured best</div><div>"partitioned hash-join performs best with cluster size of approximately 200 tuples" (page 63). An observation, not a rule. Copied to the M5 as bits = log2(C ÷ 200), rounded: 1,048,576 ÷ 200 = 5,242.9 → 12.36 → <b>12</b>; 4,194,304 → 20,971.5 → 14.36 → <b>14</b>; 8,388,608 → 41,943.0 → 15.36 → <b>15</b>; 16,777,216 → 83,886.1 → 16.36 → <b>16</b>. On the paper's own 32 KB cache, its first-cache rule gives about 2,730 rows per piece, so its measured best was smaller than its own rule.</div>
+        <div>The other join</div><div>The paper's nested-loop join, which compares every row of a piece with every row of the matching piece, uses B = log2(C ÷ 8): 17, 19, 20 and 21 bits at the 4 sizes. We did not build that join.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="stack"><div class="eyebrow">The time formulas · pages 60 and 62</div><h3>Cannot be worked out for the M5</h3></div>
+      <p>The paper also predicts the time of the hash join. The formula for cutting has the same shape, times the number of passes. Each "misses" term is itself a formula built from the sizes above.</p>
+      <div class="formula">T = C × w<sub>h</sub> + H × w′<sub>h</sub> + L1 misses × l<sub>L2</sub> + L2 misses × l<sub>Mem</sub> + TLB misses × l<sub>TLB</sub></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Constant</th><th>What it is</th><th class="num">Paper's value</th><th>M5</th></tr></thead>
+        <tbody>
+          <tr><td>w<sub>h</sub></td><td>processor work per row in the join</td><td class="num">680 ns</td><td>not measured</td></tr>
+          <tr><td>w′<sub>h</sub></td><td>making and removing one piece's hash table</td><td class="num">3,600 ns</td><td>not measured</td></tr>
+          <tr><td>w<sub>c</sub></td><td>processor work per row per cutting pass</td><td class="num">50 ns</td><td>not measured</td></tr>
+          <tr><td>l<sub>L2</sub></td><td>wait when data is not in L1 but is in L2</td><td class="num">24 ns</td><td>not measured</td></tr>
+          <tr><td>l<sub>Mem</sub></td><td>wait for main memory</td><td class="num">412 ns</td><td>not measured. Experiment 1's 34.3 ns per random read is the closest number, but those reads overlap, so it is not the same quantity.</td></tr>
+          <tr><td>l<sub>TLB</sub></td><td>wait when a page address is not on the list</td><td class="num">228 ns</td><td>not measured</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">The paper fitted these constants using the processor's miss counters, which macOS does not let a program read. Any M5 value put here would be a guess. The paper says the best bits came from "putting together the experimental data we obtained on both cluster- and join-performance": it also chose by measuring.</p>
+    </div>
+  </section>
+
+  <!-- ===================== 10 Picks ===================== -->
+  <section id="picks" class="stack">
+    <div class="col stack"><h2>How the paper's picks ran on the M5</h2>
+      <p>Times from the tuner's stage A: every setting at 1/2 row per box, median of 3 runs. Stage A did not include 8,388,608 rows. "×" means times as long as the fastest setting at that size.</p></div>
+    <div class="panel"><div class="tablewrap"><table>
+      <thead><tr><th>Rule</th><th class="num">1,048,576 rows</th><th class="num">4,194,304 rows</th><th class="num">16,777,216 rows</th></tr></thead>
+      <tbody>
+        <tr><td>Fastest measured</td><td class="num">10 bits, 1 pass: 11.82 ns</td><td class="num">10 bits, 1 pass: 12.20 ns</td><td class="num">12 bits, 1 pass: 12.65 ns</td></tr>
+        <tr><td>First-cache bits + paper's passes</td><td class="num">7 bits, 2 passes: <b>1.45×</b></td><td class="num">9 bits, 2 passes: <b>1.33×</b></td><td class="num">11 bits, 2 passes: <b>1.27×</b></td></tr>
+        <tr><td>First-cache bits in 1 pass</td><td class="num">1.05×</td><td class="num">1.04×</td><td class="num">1.02×</td></tr>
+        <tr><td>Second-cache version</td><td class="num">0 bits: 1.54×</td><td class="num">2 bits, 1 pass: 1.62×</td><td class="num">4 bits, 1 pass: 1.61×</td></tr>
+        <tr><td>Page-list version, 64 entries</td><td class="num">4 bits, 1 pass: 1.24×</td><td class="num">6 bits, 1 pass: 1.15×</td><td class="num">8 bits, 2 passes: 1.65×</td></tr>
+        <tr><td>Paper's 200-row best + its passes</td><td class="num">12 bits, 2 passes: 1.26×</td><td class="num">14 bits, 3 passes: 1.51×</td><td class="num">16 bits, 3 passes: 1.56×</td></tr>
+        <tr><td>Same 200-row bits in 1 pass</td><td class="num">1.01×</td><td class="num">1.06×</td><td class="num">1.14×</td></tr>
+      </tbody>
+    </table></div>
+    <div class="result"><span class="k">What this shows</span>
+      <ul class="clean">
+        <li>The first-cache bits rule picks good bits on the M5: within 2% to 5% of the fastest when cut in 1 pass.</li>
+        <li>The paper's 6-bits-per-pass rule, built on its 64-entry list, is what costs: the same bits in 2 passes took 1.27 to 1.45 times as long.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <!-- ===================== 11 Race ===================== -->
+  <section id="race" class="stack">
+    <div class="col stack"><h2>The race: formula against tuner</h2>
+      <p>Run on 24 November in 26 seconds, saved in <code>m5-pro/tuner/paper-race/</code>. The race program includes the tuner's own source file, so the join, the data, the clock, the answer check and the memory setup are the same lines of code on both sides. Only the settings differ. Every setting got 1 untimed warm-up join, then 10 timed joins, one per round, each round in a newly shuffled order. Times are averages of the 10.</p></div>
+    <div class="panel">
+      <div class="design">
+        <div>Tuner's pick</div><div>Its winner at the 3 sizes it learned from; its rule at 8,388,608 rows.</div>
+        <div>Paper's formula</div><div>Formula 1 as printed (12 bytes per row, first cache of 131,072 bytes read from macOS) and formula 2 with the paper's 64 entries. Rows per box: the tuner's 1/8, because the paper has no rule.</div>
+        <div>Paper's bits, 1 pass</div><div>The same bits and rows per box in 1 pass: what formula 2 gives if the M5's page-address list holds at least 2,048 entries.</div>
+        <div>First race's version</div><div>The setup of the first race on 23 November: 20 bytes per row, 2 passes, 1/2 row per box.</div>
+        <div>No cutting</div><div>One hash table on all of R, 1/8 row per box.</div>
+      </div>
+      <div class="stack"><div class="eyebrow">Average of 10 runs</div><h3>Time per row at each size</h3></div>
+      <div class="legend" id="lg-race"></div>
+      <div class="chart" id="ch-race"></div>
+      <details><summary>Show the numbers</summary><div class="tablewrap" id="tb-race"></div></details>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Rows</th><th>Tuner's pick</th><th class="num">ns per row</th><th>Paper's formula</th><th class="num">ns per row</th><th class="num">Paper took</th><th class="num">Rounds the tuner won</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1,048,576</td><td>11 bits, 1 pass, 1/8</td><td class="num">10.51</td><td>7 bits, 2 passes, 1/8</td><td class="num">15.82</td><td class="num">1.51×</td><td class="num">10 of 10</td></tr>
+          <tr><td class="num">4,194,304</td><td>12 bits, 1 pass, 1/8</td><td class="num">10.96</td><td>9 bits, 2 passes, 1/8</td><td class="num">15.23</td><td class="num">1.39×</td><td class="num">10 of 10</td></tr>
+          <tr><td class="num">8,388,608</td><td>12 bits, 1 pass, 1/8</td><td class="num">11.71</td><td>10 bits, 2 passes, 1/8</td><td class="num">15.33</td><td class="num">1.31×</td><td class="num">10 of 10</td></tr>
+          <tr><td class="num">16,777,216</td><td>10 bits, 1 pass, 1/8</td><td class="num">11.69</td><td>11 bits, 2 passes, 1/8</td><td class="num">14.91</td><td class="num">1.27×</td><td class="num">10 of 10</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Where the gap comes from</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Rows</th><th class="num">Paper's bits, 1 pass ÷ tuner</th><th class="num">Paper: 2 passes ÷ 1 pass</th><th class="num">First race's version ÷ tuner</th><th class="num">No cutting ÷ tuner</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1,048,576</td><td class="num">1.09× · tie · tuner won 9 of 10</td><td class="num">1.37×</td><td class="num">1.58×</td><td class="num">1.89×</td></tr>
+          <tr><td class="num">4,194,304</td><td class="num">1.04× · tie · tuner won 10 of 10</td><td class="num">1.33×</td><td class="num">1.49×</td><td class="num">1.95×</td></tr>
+          <tr><td class="num">8,388,608</td><td class="num">1.03× · tie · tuner won 6 of 10</td><td class="num">1.27×</td><td class="num">1.38×</td><td class="num">1.99×</td></tr>
+          <tr><td class="num">16,777,216</td><td class="num">1.02× · tie · tuner won 7 of 10</td><td class="num">1.25×</td><td class="num">1.35×</td><td class="num">1.83×</td></tr>
+        </tbody>
+      </table></div>
+      <div class="result"><span class="k">Result</span>
+        <ul class="clean">
+          <li>The tuner's pick beat the paper's formula in all 40 of 40 rounds. The paper's formula took 1.27 to 1.51 times as long.</li>
+          <li>The passes rule explains the gap: the paper's bits in 2 passes took 1.25 to 1.37 times as long as the same bits in 1 pass.</li>
+          <li>The paper's bits in 1 pass tied with the tuner at all 4 sizes: their fastest-to-slowest ranges overlap. At 4,194,304 rows the tuner still won all 10 rounds, by 4% on average.</li>
+          <li>The first race's version took 1.35 to 1.58 times as long here. The first race on 23 November, with 11 rounds, measured 1.38 to 1.60 for the same settings.</li>
+        </ul></div>
+      <p class="note">Report: <code>m5-pro/tuner/paper-race/runs/apple-m5_2026-11-24_120145/report.pdf</code>, with a chart of every timed join.</p>
+    </div>
+  </section>
+
+  <!-- ===================== 12 Beat ===================== -->
+  <section id="beat" class="stack">
+    <div class="col stack"><h2>Did we beat the paper?</h2></div>
+    <div class="verdict">
+      <p><b>On this Mac, the tuner's settings beat the paper's formula: 40 of 40 rounds, by 1.27 to 1.51 times.</b> All of that gap comes from one number the formula needs and macOS does not report: the size of the page-address list. With the paper's 1999 value of 64, the formula says 2 passes. If the M5's list allows 1 pass, the paper's settings tie with the tuner's.</p>
+    </div>
+    <div class="panel">
+      <h3>How fair the race is now</h3>
+      <div class="design">
+        <div>Rows per box</div><div><span class="tag good">fixed</span> Both sides use 1/8. The paper has no rule, so this difference is no longer counted against it.</div>
+        <div>The 12</div><div><span class="tag good">fixed</span> The formula uses the paper's 12 bytes per row as printed.</div>
+        <div>Evidence</div><div><span class="tag good">fixed</span> 10 rounds, saved in the repository with a report. Still one run.</div>
+        <div>Passes</div><div><span class="tag warn">open</span> The formula uses the 1999 computer's 64 entries. This part alone made the formula's settings take 1.25 to 1.37 times as long.</div>
+        <div>Home advantage</div><div><span class="tag warn">open</span> The tuner measured this exact Mac, data and code. The formula uses no timings. That is the point of a tuner, and an advantage on this machine.</div>
+      </div>
+      <h3>Where the paper held up</h3>
+      <ul class="clean">
+        <li><span class="tag good">Bits</span> The first-cache rule picks good bits: in 1 pass they tied with the tuner at all 4 sizes, 1.02 to 1.09 times its time.</li>
+        <li><span class="tag good">Main claim</span> Cutting first makes the join faster: the tuner's pick was 1.83 to 1.99 times as fast as no cutting with the same rows per box.</li>
+        <li><span class="tag warn">Passes</span> The 6-bits-per-pass limit comes from the 1999 computer. On the M5, 1 pass stays as fast as 2 up to 17 bits.</li>
+        <li><span class="tag bad">Rows per box</span> No rule. Its assumed 4 rows per box took 1.70 to 1.91 times as long as 1/8.</li>
+      </ul>
+      <h3>What can be said to the professor</h3>
+      <ul class="clean">
+        <li>With the same join code and the same rows per box, the paper's formula took 1.27 to 1.51 times as long as the tuner's settings on the M5, and lost 40 of 40 rounds.</li>
+        <li>All of that comes from the 6-bits-per-pass rule, built on the 1999 computer's 64-entry page-address list. The paper's bits rule still works: in 1 pass its bits tie with the tuner's.</li>
+        <li>The paper gives no rule for rows per box. Timing found 1/8 (tuner) and 1/4 (experiment 6).</li>
+        <li>A 2-minute timing tool finds these settings without knowing any hardware sizes. It automates what the paper did by hand.</li>
+        <li>Say "the tuner's settings beat the paper's formula filled in with its 1999 numbers". The algorithm is the paper's, unchanged; only the way of choosing its 3 settings differs.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== 13 Next ===================== -->
+  <section id="next" class="stack col">
+    <h2>What would make it airtight</h2>
+    <ol class="clean">
+      <li><b>Measure the M5's page-address list.</b> Read one byte from each of a growing number of 16 KiB pages; the time per read jumps once the pages outnumber the entries. Then rerun the race with that number in formula 2 (<code>PAPER_TLB_ENTRIES</code> in <code>paper-race/plan.py</code>).</li>
+      <li><b>Repeat the race and the tuner.</b> Run <code>./run.sh</code> 3 times, and the tuner itself 3 times, to show whether the results and the tuner's picks repeat.</li>
+      <li><b>Tuner version 2:</b> tune the no-cutting join's rows per box too, add 1/16 row per box, and retest passes and rows per box in the check.</li>
+    </ol>
+  </section>
+
+  <!-- ===================== 14 Files ===================== -->
+  <section id="files" class="stack">
+    <div class="col stack"><h2>Files and commands</h2></div>
+    <div class="panel"><div class="tablewrap"><table>
+      <thead><tr><th>What</th><th>Where</th></tr></thead>
+      <tbody>
+        <tr><td>The frozen rules, version 1</td><td><code>m5-pro/tuner/SPEC.md</code></td></tr>
+        <tr><td>The program (897 lines of C)</td><td><code>m5-pro/tuner/src/tune.c</code></td></tr>
+        <tr><td>The M5 run: report, every timed join, every median, winners, rule, machine</td><td><code>m5-pro/tuner/runs/apple-m5_2026-11-23_100003/</code>: <code>report.pdf</code>, <code>trials.csv</code>, <code>stages.csv</code>, <code>best.csv</code>, <code>rule.txt</code>, <code>machine.txt</code></td></tr>
+        <tr><td>Official run, about 2 minutes</td><td><code>cd m5-pro/tuner &amp;&amp; ./tune.sh</code></td></tr>
+        <tr><td>Check that everything works, about 1 second; not a result</td><td><code>./tune.sh --quick</code></td></tr>
+        <tr><td>Self-test under the memory checkers</td><td><code>make check</code></td></tr>
+        <tr><td>Compare two machines (same rules version only)</td><td><code>python3 report.py runs/&lt;first&gt; runs/&lt;second&gt;</code></td></tr>
+        <tr><td>The race against the paper's formula: program, settings, report</td><td><code>m5-pro/tuner/paper-race/</code>; run of 24 November in <code>runs/apple-m5_2026-11-24_120145/</code></td></tr>
+        <tr><td>Rerun the race, about 30 seconds</td><td><code>cd m5-pro/tuner/paper-race &amp;&amp; ./run.sh</code></td></tr>
+        <tr><td>The paper</td><td>Not in the repository. VLDB 1999 proceedings, paper P5.</td></tr>
+      </tbody>
+    </table></div></div>
+  </section>
+
+  <footer class="col">Made on 24 November 2026 from <code>m5-pro/tuner/</code>, the paper, and the race of 24 November. Every time is a median of its runs.</footer>
+  <div id="tip" hidden></div>
+</div>
+
+<script>
+const DATA = {"curves":{"1048576":{"series":[{"name":"1 pass","c":"--s1","pts":[[1,20.3],[2,16.35],[3,15.48],[4,14.71],[5,13.39],[6,13.02],[7,12.45],[8,12.17],[9,11.85],[10,11.82],[11,11.92],[12,11.94],[13,12.38],[14,12.75],[15,13.43],[16,13.88]]},{"name":"2 passes","c":"--s2","pts":[[2,23.17],[3,20.77],[4,18.05],[5,17.24],[6,17.57],[7,17.11],[8,15.96],[9,15.36],[10,15.34],[11,14.67],[12,14.92],[13,14.61],[14,14.53],[15,14.99],[16,15.76]]},{"name":"3 passes","c":"--s3","pts":[[3,28.45],[4,25.66],[5,23.37],[6,21.17],[7,20.59],[8,19.77],[9,21.15],[10,19.33],[11,18.9],[12,18.53],[13,18.39],[14,18.17],[15,18.22],[16,18.63]]}],"nocut":18.18},"4194304":{"series":[{"name":"1 pass","c":"--s1","pts":[[1,27.74],[2,19.73],[3,16.45],[4,15.39],[5,14.73],[6,14.01],[7,13.39],[8,13.17],[9,12.72],[10,12.2],[11,12.29],[12,12.27],[13,12.54],[14,12.97],[15,13.31],[16,13.41],[17,14.29],[18,17.12]]},{"name":"2 passes","c":"--s2","pts":[[2,28.22],[3,23.34],[4,20.4],[5,18.74],[6,18.54],[7,17.51],[8,16.88],[9,16.18],[10,14.98],[11,15.17],[12,15.06],[13,14.8],[14,14.77],[15,14.86],[16,14.98],[17,15.19],[18,15.61]]},{"name":"3 passes","c":"--s3","pts":[[3,30.16],[4,27.34],[5,24.43],[6,22.23],[7,21.58],[8,22.5],[9,20.66],[10,19.85],[11,19.46],[12,18.93],[13,18.67],[14,18.43],[15,18.48],[16,18.02],[17,18.13],[18,18.33]]}],"nocut":26.82},"16777216":{"series":[{"name":"1 pass","c":"--s1","pts":[[1,35.15],[2,28.94],[3,24.98],[4,20.36],[5,16.9],[6,15.43],[7,14.62],[8,14.22],[9,13.22],[10,13.14],[11,12.94],[12,12.65],[13,13.65],[14,13.43],[15,13.59],[16,14.38],[17,14.48],[18,16.5]]},{"name":"2 passes","c":"--s2","pts":[[2,36.19],[3,30.81],[4,24.63],[5,20.44],[6,19.87],[7,18.49],[8,20.84],[9,17.26],[10,18.06],[11,16.11],[12,15.34],[13,14.9],[14,14.63],[15,15.15],[16,15.21],[17,14.95],[18,15.17]]},{"name":"3 passes","c":"--s3","pts":[[3,39.16],[4,31.62],[5,26.79],[6,23.02],[7,22.44],[8,22.01],[9,21.33],[10,20.73],[11,20.36],[12,19.17],[13,19.03],[14,18.38],[15,18.74],[16,19.68],[17,18.68],[18,18.08]]}],"nocut":32.95}},"load":[{"name":"1,048,576 rows (11 bits)","c":"--s1","pts":[[0.125,10.36],[0.25,10.62],[0.5,11.95],[1.0,14.69],[2.0,16.91],[4.0,18.27]]},{"name":"4,194,304 rows (12 bits)","c":"--s2","pts":[[0.125,10.1],[0.25,11.33],[0.5,12.05],[1.0,15.01],[2.0,16.71],[4.0,18.73]]},{"name":"16,777,216 rows (10 bits)","c":"--s3","pts":[[0.125,11.38],[0.25,11.52],[0.5,13.36],[1.0,15.73],[2.0,17.86],[4.0,20.08]]}]};
+const LOAD_TICKS = [0.125, 0.25, 0.5, 1, 2, 4], LOAD_LABELS = ["1/8", "1/4", "1/2", "1", "2", "4"];
+const tip = document.getElementById("tip");
+
+function draw(id, c) {
+  const W = 760, H = 300, L = 58, Rr = 190, T = 14, B = 46;
+  const allX = [...new Set(c.series.flatMap((s) => s.pts.map((p) => p[0])))].sort((a, b) => a - b);
+  const ys = c.series.flatMap((s) => s.pts.map((p) => p[1])).concat(c.ref ? [c.ref] : []);
+  const ymax0 = Math.max(...ys) * 1.08;
+  const raw = ymax0 / 5, e = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / e;
+  const step = (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * e;
+  const ymax = Math.ceil(ymax0 / step) * step;
+  const xv = (x) => c.xLog ? Math.log2(x) : x;
+  const x0 = xv(allX[0]), x1 = xv(allX[allX.length - 1]);
+  const X = (x) => L + (W - L - Rr) * (xv(x) - x0) / (x1 - x0 || 1);
+  const Y = (y) => T + (H - T - B) * (1 - y / ymax);
+  const tl = (t) => c.xLabels ? c.xLabels[c.xTicks.indexOf(t)] : String(t);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${c.yLabel} by ${c.xLabel}">`;
+  for (let v = 0; v <= ymax + 1e-9; v += step) {
+    s += `<line x1="${L}" x2="${W - Rr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1"/>`;
+    s += `<text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--mono)">${v}</text>`;
+  }
+  for (const t of c.xTicks) s += `<text x="${X(t)}" y="${H - B + 18}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="var(--mono)">${tl(t)}</text>`;
+  s += `<text x="${(L + W - Rr) / 2}" y="${H - 6}" text-anchor="middle" font-size="12" fill="var(--muted)">${c.xLabel}</text>`;
+  s += `<text x="14" y="${T + (H - T - B) / 2}" text-anchor="middle" font-size="12" fill="var(--muted)" transform="rotate(-90 14 ${T + (H - T - B) / 2})">${c.yLabel}</text>`;
+  s += `<line x1="${L}" x2="${W - Rr}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--muted)" stroke-width="1"/>`;
+  const ends = [];
+  if (c.ref) {
+    s += `<line x1="${X(allX[0])}" x2="${X(allX[allX.length - 1])}" y1="${Y(c.ref)}" y2="${Y(c.ref)}" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+    ends.push({ y: Y(c.ref), x: X(allX[allX.length - 1]), name: c.refName, fill: "var(--muted)" });
+  }
+  c.series.forEach((se) => {
+    s += `<polyline points="${se.pts.map((p) => X(p[0]) + "," + Y(p[1])).join(" ")}" fill="none" stroke="var(${se.c})" stroke-width="2" stroke-linejoin="round"/>`;
+    se.pts.forEach((p) => { s += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="4" fill="var(${se.c})" stroke="var(--surface)" stroke-width="2"/>`; });
+    const lp = se.pts[se.pts.length - 1];
+    ends.push({ y: Y(lp[1]), x: X(lp[0]), name: se.name, fill: "var(--fg-2)" });
+  });
+  ends.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 15) ends[i].y = ends[i - 1].y + 15;
+  ends.forEach((en) => { s += `<text x="${en.x + 10}" y="${en.y + 4}" font-size="11.5" fill="${en.fill}">${en.name}</text>`; });
+  s += `<line id="${id}-cross" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/>`;
+  s += `<rect x="${L - 10}" y="${T}" width="${W - L - Rr + 20}" height="${H - T - B}" fill="transparent" id="${id}-hit"/></svg>`;
+  const el = document.getElementById("ch-" + id);
+  el.innerHTML = s;
+  document.getElementById("lg-" + id).innerHTML = c.series.map((se) => `<span><i class="sw" style="border-color:var(${se.c})"></i>${se.name}</span>`).join("")
+    + (c.ref ? `<span><i class="sw dash" style="border-color:var(--muted)"></i>${c.refName}</span>` : "");
+  const svg = el.querySelector("svg"), cross = el.querySelector(`#${id}-cross`), hit = el.querySelector(`#${id}-hit`);
+  hit.addEventListener("mousemove", (ev) => {
+    const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    let best = allX[0];
+    for (const x of allX) if (Math.abs(X(x) - loc.x) < Math.abs(X(best) - loc.x)) best = x;
+    cross.setAttribute("x1", X(best)); cross.setAttribute("x2", X(best)); cross.setAttribute("visibility", "visible");
+    const lines = c.series.map((se) => { const p = se.pts.find((q) => q[0] === best); return p ? `${se.name}: ${p[1].toFixed(2)} ns` : null; }).filter(Boolean);
+    if (c.ref) lines.push(`${c.refName}: ${c.ref.toFixed(2)} ns`);
+    tip.innerHTML = `<b>${tl(best)}${c.xUnit}</b><br>` + lines.join("<br>");
+    tip.hidden = false; tip.style.left = (ev.clientX + 14) + "px"; tip.style.top = (ev.clientY - 20) + "px";
+  });
+  hit.addEventListener("mouseleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
+  let t = `<table><thead><tr><th class="num">${c.xLabel}</th>` + c.series.map((se) => `<th class="num">${se.name}</th>`).join("") + (c.ref ? `<th class="num">${c.refName}</th>` : "") + `</tr></thead><tbody>`;
+  for (const x of allX) {
+    t += `<tr><td class="num">${tl(x)}</td>` + c.series.map((se) => { const p = se.pts.find((q) => q[0] === x); return `<td class="num">${p ? p[1].toFixed(2) : "–"}</td>`; }).join("") + (c.ref ? `<td class="num">${c.ref.toFixed(2)}</td>` : "") + `</tr>`;
+  }
+  document.getElementById("tb-" + id).innerHTML = t + `</tbody></table><p class="note">${c.note}</p>`;
+}
+
+function curve(n) {
+  const d = DATA.curves[n];
+  const bmax = Math.max(...d.series[0].pts.map((p) => p[0]));
+  draw("curve", { series: d.series, ref: d.nocut, refName: "no cutting", xTicks: Array.from({ length: bmax }, (_, i) => i + 1),
+    xLabel: "radix bits", xUnit: " bits", yLabel: "ns per row", note: "ns per row, median of 3 runs." });
+  document.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.n === n)));
+}
+document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => curve(b.dataset.n)));
+curve("16777216");
+draw("load", { series: DATA.load, xLog: true, xTicks: LOAD_TICKS, xLabels: LOAD_LABELS, xLabel: "rows per box", xUnit: " row per box", yLabel: "ns per row", note: "ns per row, median of 3 runs." });
+const RACE_N = [1048576, 4194304, 8388608, 16777216];
+draw("race", { xLog: true, xTicks: RACE_N, xLabels: RACE_N.map((n) => n.toLocaleString("en-US")), xLabel: "rows per table", xUnit: " rows", yLabel: "ns per row", note: "ns per row, average of 10 runs.",
+  series: [
+    { name: "Paper's formula", c: "--s2", pts: [[1048576, 15.82], [4194304, 15.23], [8388608, 15.33], [16777216, 14.91]] },
+    { name: "Paper's bits, 1 pass", c: "--s3", pts: [[1048576, 11.51], [4194304, 11.41], [8388608, 12.05], [16777216, 11.91]] },
+    { name: "Tuner's pick", c: "--s1", pts: [[1048576, 10.51], [4194304, 10.96], [8388608, 11.71], [16777216, 11.69]] },
+  ] });
+</script>
+</body>
+</html>

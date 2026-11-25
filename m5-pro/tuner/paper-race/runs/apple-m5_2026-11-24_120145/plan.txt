@@ -1,0 +1,29 @@
+tuner_run=apple-m5_2026-11-23_100003
+first_cache_bytes=131072 (from: sysctl -n hw.perflevel0.l1dcachesize)
+paper_row_bytes=12
+paper_tlb_entries=64 (the paper's computer; this machine's is not reported)
+first_race_row_bytes=20
+
+== 1,048,576 rows
+tuner: 11 bits, 1 pass(es), 1/8 row per box (the tuner's winner at this size)
+paper bits: 1,048,576 x 12 / 131,072 = 96.000; log2 = 6.585; rounded up = 7
+paper passes: 7 / log2(64) = 7 / 6 = 1.17; rounded up = 2
+first-race bits: 1,048,576 x 20 / 131,072 = 160.000; log2 = 7.322; rounded up = 8; passes = 2
+
+== 4,194,304 rows
+tuner: 12 bits, 1 pass(es), 1/8 row per box (the tuner's winner at this size)
+paper bits: 4,194,304 x 12 / 131,072 = 384.000; log2 = 8.585; rounded up = 9
+paper passes: 9 / log2(64) = 9 / 6 = 1.50; rounded up = 2
+first-race bits: 4,194,304 x 20 / 131,072 = 640.000; log2 = 9.322; rounded up = 10; passes = 2
+
+== 8,388,608 rows
+tuner: 12 bits, 1 pass(es), 1/8 row per box (the tuner's rule: round(log2(8,388,608 / 2,048)) = round(12.000) = 12 bits)
+paper bits: 8,388,608 x 12 / 131,072 = 768.000; log2 = 9.585; rounded up = 10
+paper passes: 10 / log2(64) = 10 / 6 = 1.67; rounded up = 2
+first-race bits: 8,388,608 x 20 / 131,072 = 1,280.000; log2 = 10.322; rounded up = 11; passes = 2
+
+== 16,777,216 rows
+tuner: 10 bits, 1 pass(es), 1/8 row per box (the tuner's winner at this size)
+paper bits: 16,777,216 x 12 / 131,072 = 1,536.000; log2 = 10.585; rounded up = 11
+paper passes: 11 / log2(64) = 11 / 6 = 1.83; rounded up = 2
+first-race bits: 16,777,216 x 20 / 131,072 = 2,560.000; log2 = 11.322; rounded up = 12; passes = 2
