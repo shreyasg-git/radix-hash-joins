@@ -1,0 +1,9 @@
+rows_per_input,label,setting,rounds,mean,sd,median,min,max,monetdb_join_mean,monetdb_checksum_mean,monetdb_over_tuner,rounds_tuner_faster
+1048576,tuner,"11 bits, 1 pass(es), 0.125 rows per box",10,9.1970,0.1580,9.1720,9.0084,9.5345,,,,
+1048576,monetdb,hashjoin using new hash; create hash,10,41.1898,1.6557,40.6695,39.7626,45.4121,40.1196,1.0701,4.4786,10
+4194304,tuner,"12 bits, 1 pass(es), 0.125 rows per box",10,9.5310,0.1817,9.4855,9.3154,9.8359,,,,
+4194304,monetdb,hashjoin using new hash; create hash,10,69.6323,1.8237,69.1309,67.3943,73.1982,67.8990,1.7333,7.3059,10
+8388608,tuner,"12 bits, 1 pass(es), 0.125 rows per box",10,10.2263,0.1912,10.1984,10.0231,10.5883,,,,
+8388608,monetdb,hashjoin using new hash; create hash,10,80.5913,1.2777,79.9819,79.4493,83.1847,78.6190,1.9723,7.8808,10
+16777216,tuner,"10 bits, 1 pass(es), 0.125 rows per box",10,10.9646,1.6347,10.3879,10.2966,15.5747,,,,
+16777216,monetdb,hashjoin using new hash; create hash,10,86.1530,1.5887,85.9095,83.4745,88.5473,83.7543,2.3987,7.8573,10

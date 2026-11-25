@@ -43,6 +43,7 @@ the number of matches and the checksum against the tuner's answer.
 | 1 | Can our program call `BATjoin` at all? 10 rows. | Same 5 matches and checksum as the tuner's nested-loop join |
 | 2 | One join at 1,048,576 rows: which method MonetDB picks, one timing | Hash join, hash table on R (as the tuner). 40.70 ns per row against the tuner's 9.95 (one run each) |
 | 3 | Where MonetDB's time goes: building the hash table against looking up | Looking up is 68% at 1M rows and 73% at 16M rows; it slows down 2.25x from 1M to 16M rows |
+| 4 | MonetDB against the tuner's pick: 4 sizes, 10 shuffled rounds, as in the race | Tuner faster in 40 of 40 rounds: MonetDB takes 4.48x the time at 1M rows and 7.31x to 7.88x from 4M to 16M rows |
 
 ### Step 1: call MonetDB's join on 10 rows
 
@@ -118,3 +119,47 @@ checked. Output: `runs/step3_1048576.txt`, `runs/step3_16777216.txt`.
 - For scale, the tuner's pick took 11.69 ns per row at 16,777,216 rows in the
   race (`../tuner/paper-race/`); MonetDB's whole join here is 7.1 times that.
   Step 4 measures both in the same program.
+
+### Step 4: MonetDB against the tuner's pick, measured like the race
+
+```
+cd exp1-monetdb-join && ./run.sh                   # about 30 seconds on the Apple M5
+python3 summarize.py runs/<folder>                  # writes summary.csv, prints the table
+./run.sh --quick                                    # checks that everything works; not a result
+```
+
+The same rules as the race (`../tuner/paper-race/`): the tuner's own data and
+code, every setting gets 1 untimed warm-up, then 10 rounds, each round runs
+both settings once in a newly shuffled order, every answer is checked. The
+tuner's picks are copied from the race's plan. MonetDB's time is its whole
+`BATjoin` on new columns plus turning its answer into the tuner's checksum,
+because the tuner's join makes the checksum inside its own timing. MonetDB
+reported "hashjoin using new hash; create hash" in all 40 of its trials.
+
+Run `runs/apple-m5_2026-11-26_044643_step4/`, 31.5 seconds. ns per row:
+
+| Rows per table | Tuner's pick | Tuner: average (fastest to slowest) | MonetDB: average (fastest to slowest) | MonetDB ÷ tuner | Rounds the tuner was faster |
+|---|---|---|---|---|---|
+| 1,048,576 | 11 bits, 1 pass, 1/8 | 9.20 (9.01 to 9.53) | 41.19 (39.76 to 45.41) | 4.48 | 10 of 10 |
+| 4,194,304 | 12 bits, 1 pass, 1/8 | 9.53 (9.32 to 9.84) | 69.63 (67.39 to 73.20) | 7.31 | 10 of 10 |
+| 8,388,608 | 12 bits, 1 pass, 1/8 | 10.23 (10.02 to 10.59) | 80.59 (79.45 to 83.18) | 7.88 | 10 of 10 |
+| 16,777,216 | 10 bits, 1 pass, 1/8 | 10.96 (10.30 to 15.57) | 86.15 (83.47 to 88.55) | 7.86 | 10 of 10 |
+
+- MonetDB's checksum part is 1.07 to 2.40 ns per row of these; the rest is
+  `BATjoin` (40.12 to 83.75).
+- From 1M to 16M rows the tuner's join slows down 1.19x, MonetDB's 2.09x:
+  the radix join keeps each piece's hash table in the cache, MonetDB's one
+  table does not fit once it passes the 16 MB second cache.
+- The tuner's pick ran faster here than in the race of 2026-11-24 with the
+  same code and settings (9.20 against 10.51 ns per row at 1M rows, 10.96
+  against 11.69 at 16M). Here it alternates only with MonetDB; in the race it
+  alternated with 4 other settings. I have not tested why.
+
+What this does not show yet:
+- MonetDB makes the memory for its hash table and its two result lists
+  inside the join; the tuner's join uses memory set up before the clock
+  starts. How much of MonetDB's time that is has not been measured.
+- MonetDB writes out every matching pair; the tuner's join does not keep
+  them. A database needs the pairs to fetch other columns afterwards.
+- One thread, one machine, one data set (unique keys, both tables the same
+  size, half of S matching), as in the race.

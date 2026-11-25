@@ -1,0 +1,9 @@
+rows_per_input,label,bits,passes,rows_per_bucket
+1048576,tuner,11,1,0.125
+1048576,monetdb,0,0,0
+4194304,tuner,12,1,0.125
+4194304,monetdb,0,0,0
+8388608,tuner,12,1,0.125
+8388608,monetdb,0,0,0
+16777216,tuner,10,1,0.125
+16777216,monetdb,0,0,0

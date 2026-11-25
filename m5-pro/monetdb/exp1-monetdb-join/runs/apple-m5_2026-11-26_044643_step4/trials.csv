@@ -1,0 +1,81 @@
+rows_per_input,label,bits,passes,rows_per_bucket,round,position,ns_per_row,join_ns_per_row,checksum_ns_per_row,method
+1048576,tuner,11,1,0.125,1,1,9.0294,9.0294,,radix join (tuner spec 1)
+1048576,monetdb,,,,1,2,40.5471,39.4769,1.0702,hashjoin using new hash; create hash
+1048576,tuner,11,1,0.125,2,1,9.1956,9.1956,,radix join (tuner spec 1)
+1048576,monetdb,,,,2,2,39.7626,38.8949,0.8676,hashjoin using new hash; create hash
+1048576,monetdb,,,,3,1,40.6524,39.2965,1.3560,hashjoin using new hash; create hash
+1048576,tuner,11,1,0.125,3,2,9.5345,9.5345,,radix join (tuner spec 1)
+1048576,monetdb,,,,4,1,41.0767,40.0773,0.9994,hashjoin using new hash; create hash
+1048576,tuner,11,1,0.125,4,2,9.1043,9.1043,,radix join (tuner spec 1)
+1048576,monetdb,,,,5,1,40.6866,39.4369,1.2498,hashjoin using new hash; create hash
+1048576,tuner,11,1,0.125,5,2,9.0084,9.0084,,radix join (tuner spec 1)
+1048576,monetdb,,,,6,1,39.7768,38.7319,1.0449,hashjoin using new hash; create hash
+1048576,tuner,11,1,0.125,6,2,9.1094,9.1094,,radix join (tuner spec 1)
+1048576,tuner,11,1,0.125,7,1,9.1484,9.1484,,radix join (tuner spec 1)
+1048576,monetdb,,,,7,2,42.2297,41.0269,1.2029,hashjoin using new hash; create hash
+1048576,monetdb,,,,8,1,45.4121,44.4006,1.0115,hashjoin using new hash; create hash
+1048576,tuner,11,1,0.125,8,2,9.3213,9.3213,,radix join (tuner spec 1)
+1048576,tuner,11,1,0.125,9,1,9.2079,9.2079,,radix join (tuner spec 1)
+1048576,monetdb,,,,9,2,40.3450,39.4280,0.9169,hashjoin using new hash; create hash
+1048576,monetdb,,,,10,1,41.4085,40.4265,0.9820,hashjoin using new hash; create hash
+1048576,tuner,11,1,0.125,10,2,9.3112,9.3112,,radix join (tuner spec 1)
+4194304,tuner,12,1,0.125,1,1,9.3457,9.3457,,radix join (tuner spec 1)
+4194304,monetdb,,,,1,2,69.3580,67.6536,1.7044,hashjoin using new hash; create hash
+4194304,monetdb,,,,2,1,67.5359,65.8899,1.6459,hashjoin using new hash; create hash
+4194304,tuner,12,1,0.125,2,2,9.3154,9.3154,,radix join (tuner spec 1)
+4194304,monetdb,,,,3,1,68.9039,66.9528,1.9511,hashjoin using new hash; create hash
+4194304,tuner,12,1,0.125,3,2,9.8359,9.8359,,radix join (tuner spec 1)
+4194304,tuner,12,1,0.125,4,1,9.5223,9.5223,,radix join (tuner spec 1)
+4194304,monetdb,,,,4,2,68.6640,67.0631,1.6010,hashjoin using new hash; create hash
+4194304,monetdb,,,,5,1,70.1160,68.4687,1.6473,hashjoin using new hash; create hash
+4194304,tuner,12,1,0.125,5,2,9.8297,9.8297,,radix join (tuner spec 1)
+4194304,monetdb,,,,6,1,73.1982,70.9720,2.2262,hashjoin using new hash; create hash
+4194304,tuner,12,1,0.125,6,2,9.5826,9.5826,,radix join (tuner spec 1)
+4194304,tuner,12,1,0.125,7,1,9.4181,9.4181,,radix join (tuner spec 1)
+4194304,monetdb,,,,7,2,67.3943,65.8041,1.5902,hashjoin using new hash; create hash
+4194304,tuner,12,1,0.125,8,1,9.4335,9.4335,,radix join (tuner spec 1)
+4194304,monetdb,,,,8,2,68.8522,67.1100,1.7422,hashjoin using new hash; create hash
+4194304,tuner,12,1,0.125,9,1,9.5782,9.5782,,radix join (tuner spec 1)
+4194304,monetdb,,,,9,2,70.5110,68.8875,1.6235,hashjoin using new hash; create hash
+4194304,monetdb,,,,10,1,71.7897,70.1882,1.6014,hashjoin using new hash; create hash
+4194304,tuner,12,1,0.125,10,2,9.4487,9.4487,,radix join (tuner spec 1)
+8388608,monetdb,,,,1,1,79.4561,77.5662,1.8899,hashjoin using new hash; create hash
+8388608,tuner,12,1,0.125,1,2,10.0231,10.0231,,radix join (tuner spec 1)
+8388608,tuner,12,1,0.125,2,1,10.3249,10.3249,,radix join (tuner spec 1)
+8388608,monetdb,,,,2,2,79.4556,77.5581,1.8975,hashjoin using new hash; create hash
+8388608,tuner,12,1,0.125,3,1,10.5883,10.5883,,radix join (tuner spec 1)
+8388608,monetdb,,,,3,2,83.1847,81.2076,1.9770,hashjoin using new hash; create hash
+8388608,tuner,12,1,0.125,4,1,10.0333,10.0333,,radix join (tuner spec 1)
+8388608,monetdb,,,,4,2,81.5589,79.2916,2.2673,hashjoin using new hash; create hash
+8388608,monetdb,,,,5,1,81.2638,79.3570,1.9069,hashjoin using new hash; create hash
+8388608,tuner,12,1,0.125,5,2,10.3794,10.3794,,radix join (tuner spec 1)
+8388608,tuner,12,1,0.125,6,1,10.3816,10.3816,,radix join (tuner spec 1)
+8388608,monetdb,,,,6,2,79.4493,77.5757,1.8736,hashjoin using new hash; create hash
+8388608,tuner,12,1,0.125,7,1,10.2696,10.2696,,radix join (tuner spec 1)
+8388608,monetdb,,,,7,2,79.8218,77.9331,1.8888,hashjoin using new hash; create hash
+8388608,tuner,12,1,0.125,8,1,10.0556,10.0556,,radix join (tuner spec 1)
+8388608,monetdb,,,,8,2,81.7584,79.8716,1.8869,hashjoin using new hash; create hash
+8388608,tuner,12,1,0.125,9,1,10.1271,10.1271,,radix join (tuner spec 1)
+8388608,monetdb,,,,9,2,79.9861,78.1065,1.8796,hashjoin using new hash; create hash
+8388608,tuner,12,1,0.125,10,1,10.0803,10.0803,,radix join (tuner spec 1)
+8388608,monetdb,,,,10,2,79.9778,77.7226,2.2552,hashjoin using new hash; create hash
+16777216,tuner,10,1,0.125,1,1,10.2966,10.2966,,radix join (tuner spec 1)
+16777216,monetdb,,,,1,2,83.4745,81.4067,2.0678,hashjoin using new hash; create hash
+16777216,monetdb,,,,2,1,88.1400,85.8448,2.2952,hashjoin using new hash; create hash
+16777216,tuner,10,1,0.125,2,2,10.3303,10.3303,,radix join (tuner spec 1)
+16777216,tuner,10,1,0.125,3,1,10.3523,10.3523,,radix join (tuner spec 1)
+16777216,monetdb,,,,3,2,84.7686,82.6822,2.0863,hashjoin using new hash; create hash
+16777216,monetdb,,,,4,1,85.9402,83.8707,2.0695,hashjoin using new hash; create hash
+16777216,tuner,10,1,0.125,4,2,10.4490,10.4490,,radix join (tuner spec 1)
+16777216,tuner,10,1,0.125,5,1,10.3791,10.3791,,radix join (tuner spec 1)
+16777216,monetdb,,,,5,2,86.9843,82.8341,4.1502,hashjoin using new hash; create hash
+16777216,tuner,10,1,0.125,6,1,15.5747,15.5747,,radix join (tuner spec 1)
+16777216,monetdb,,,,6,2,87.3375,84.7764,2.5611,hashjoin using new hash; create hash
+16777216,tuner,10,1,0.125,7,1,11.0597,11.0597,,radix join (tuner spec 1)
+16777216,monetdb,,,,7,2,85.8789,83.8172,2.0616,hashjoin using new hash; create hash
+16777216,tuner,10,1,0.125,8,1,10.3583,10.3583,,radix join (tuner spec 1)
+16777216,monetdb,,,,8,2,88.5473,86.2342,2.3131,hashjoin using new hash; create hash
+16777216,monetdb,,,,9,1,85.1179,82.8197,2.2982,hashjoin using new hash; create hash
+16777216,tuner,10,1,0.125,9,2,10.4498,10.4498,,radix join (tuner spec 1)
+16777216,monetdb,,,,10,1,85.3411,83.2570,2.0841,hashjoin using new hash; create hash
+16777216,tuner,10,1,0.125,10,2,10.3967,10.3967,,radix join (tuner spec 1)

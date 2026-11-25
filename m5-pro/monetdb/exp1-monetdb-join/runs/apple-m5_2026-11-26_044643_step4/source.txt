@@ -1,0 +1,2 @@
+tuner picks from: ../../tuner/paper-race/runs/apple-m5_2026-11-24_120145/plan.csv
+monetdb_commit=f17907b90959fbde85465eafd5f28ae41ea393a0
