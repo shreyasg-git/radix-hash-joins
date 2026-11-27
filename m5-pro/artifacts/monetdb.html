@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MonetDB Join Experiments</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one reading column (~70ch) with full-width panels for tables and charts; same look as the project's other pages. */
+:root {
+  --bg: #f5f6f8; --surface: #ffffff; --surface-2: #eceff3; --line: #d9dee5;
+  --fg: #131820; --fg-2: #47505d; --muted: #6a7280;
+  --accent: #2a78d6;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
+  --good-bg: #dff3ea; --good-fg: #11674a; --warn-bg: #fbeedd; --warn-fg: #8a4b0f; --bad-bg: #fbe3e1; --bad-fg: #9b2a22;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111317; --surface: #191c21; --surface-2: #23272e; --line: #30353d;
+    --fg: #eef0f3; --fg-2: #b8bfc9; --muted: #8b939e;
+    --accent: #5b9cec; --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+    --good-bg: #123a2c; --good-fg: #7fdcb4; --warn-bg: #3e2a12; --warn-fg: #f2bd7d; --bad-bg: #42191a; --bad-fg: #f3a39c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111317; --surface: #191c21; --surface-2: #23272e; --line: #30353d;
+  --fg: #eef0f3; --fg-2: #b8bfc9; --muted: #8b939e;
+  --accent: #5b9cec; --s1: #3987e5; --s2: #d95926; --s3: #199e70;
+  --good-bg: #123a2c; --good-fg: #7fdcb4; --warn-bg: #3e2a12; --warn-fg: #f2bd7d; --bad-bg: #42191a; --bad-fg: #f3a39c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 40px 80px; }
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 30px; }
+.col { max-width: 70ch; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 2.9rem); font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 1.55rem; font-weight: 600; letter-spacing: -0.01em; }
+h3 { font-size: 1.08rem; font-weight: 600; }
+p { margin: 0; }
+section { scroll-margin-top: 16px; }
+.stack { display: grid; gap: 14px; }
+.eyebrow { font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 1.15rem; color: var(--fg-2); }
+code { font-family: var(--mono); font-size: 0.88em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.simple { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; display: grid; gap: 8px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: grid; gap: 16px; min-width: 0; }
+.design { display: grid; grid-template-columns: 10rem 1fr; border-top: 1px solid var(--line); }
+.design > div { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--line); font-size: 0.95rem; min-width: 0; }
+.design > div:nth-child(odd) { font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding-top: 11px; }
+@media (max-width: 560px) { .design { grid-template-columns: 1fr; } .design > div:nth-child(odd) { border-bottom: 0; padding-bottom: 0; } }
+.result { background: var(--surface-2); border-radius: 8px; padding: 14px 16px; display: grid; gap: 8px; }
+.result .k { font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.pick td { background: var(--surface-2); }
+.tablewrap { overflow-x: auto; min-width: 0; }
+.note { font-size: 0.85rem; color: var(--muted); }
+ul.clean, ol.clean { margin: 0; padding-left: 1.2rem; display: grid; gap: 8px; }
+.toc { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 4px 20px; margin: 0; padding: 0; list-style: none; counter-reset: toc; font-size: 0.95rem; }
+.toc li { counter-increment: toc; display: flex; gap: 8px; }
+.toc li::before { content: counter(toc); font-family: var(--mono); font-size: 0.8rem; color: var(--muted); min-width: 1.4rem; padding-top: 2px; }
+.words { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.word { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: var(--surface); display: grid; gap: 4px; align-content: start; }
+.word b { font-size: 0.98rem; }
+.word p { font-size: 0.92rem; color: var(--fg-2); }
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.flow div { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: var(--surface-2); font-size: 0.9rem; display: grid; gap: 4px; align-content: start; }
+.flow div b { font-size: 0.95rem; }
+.flow div i { font-style: normal; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+.formula { font-family: var(--mono); font-size: 1.02rem; background: var(--surface-2); border-radius: 8px; padding: 12px 16px; overflow-x: auto; white-space: nowrap; }
+.steps { margin: 0; padding-left: 1.4rem; display: grid; gap: 6px; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; font-size: 0.78rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.tag.good { background: var(--good-bg); color: var(--good-fg); }
+.tag.warn { background: var(--warn-bg); color: var(--warn-fg); }
+.tag.bad { background: var(--bad-bg); color: var(--bad-fg); }
+.verdict { border: 1px solid var(--line); border-left: 4px solid var(--warn-fg); border-radius: 8px; padding: 14px 16px; background: var(--surface); display: grid; gap: 8px; }
+.chart { width: 100%; overflow-x: auto; }
+.chart svg { display: block; width: 100%; height: auto; min-width: 520px; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.82rem; color: var(--fg-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 0; border-top: 2px solid; display: inline-block; }
+.sw.dash { border-top-style: dashed; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { font: inherit; font-size: 0.85rem; font-family: var(--mono); padding: 5px 11px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg-2); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+details summary { cursor: pointer; font-size: 0.88rem; color: var(--accent); }
+details[open] summary { margin-bottom: 8px; }
+#tip { position: fixed; pointer-events: none; background: var(--fg); color: var(--bg); font-size: 0.8rem; padding: 7px 10px; border-radius: 6px; font-family: var(--mono); z-index: 20; line-height: 1.45; }
+footer { font-size: 0.85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="stack col">
+    <div class="eyebrow">Radix hash join project · Apple M5 MacBook Pro · MonetDB 56.0.0, commit f17907b909 · runs of 26 November 2026</div>
+    <h1>MonetDB Join Experiments</h1>
+    <p class="lede">What MonetDB does when it joins two tables, the radix join it used to have, and how both did against the tuner's join on the tuner's data.</p>
+  </header>
+
+  <section class="simple col" aria-label="Short version">
+    <p><b>Short version.</b></p>
+    <ul class="clean">
+      <li>MonetDB is a database built by two of the 1999 paper's authors. We downloaded its source code as of 25 November 2026, built it on the M5, and called its join code from our own small programs.</li>
+      <li>Today's MonetDB has no radix join. It joins with one big hash table on all of one table. Every size in it is a fixed number in the code; nothing picks settings by timing.</li>
+      <li><b>Experiment 1:</b> MonetDB's own join on the tuner's tables took 4.48 to 7.88 times as long as the tuner's pick, and was slower in 40 of 40 rounds.</li>
+      <li>Until 2007 MonetDB had a radix join, written by Peter Boncz. We copied it out of MonetDB's history and ran it on the tuner's data: 486 of 486 answers were right.</li>
+      <li><b>Experiment 2:</b> at the tuner's bits and passes, Boncz's join took 0.93 to 0.98 times the tuner's time up to 8,388,608 rows, and 1.03 times at 16,777,216. At the paper's formula it took 1.14 to 1.34 times as long, and lost 40 of 40 rounds.</li>
+      <li>Boncz's lead most likely comes from this data. His way of cutting reads each table once when the pieces come out equal, and on the tuner's data they always did. This has not been tested on uneven data.</li>
+    </ul>
+  </section>
+
+  <nav class="stack" aria-label="Contents">
+    <h2>On this page</h2>
+    <ol class="toc">
+      <li><a href="#words">Words used on this page</a></li>
+      <li><a href="#layers">How a join runs in MonetDB today</a></li>
+      <li><a href="#history">The radix join MonetDB used to have</a></li>
+      <li><a href="#who">Who picks the settings</a></li>
+      <li><a href="#exp1">Experiment 1: MonetDB's join on the tuner's data</a></li>
+      <li><a href="#exp2">Experiment 2: Boncz's radix join, copied</a></li>
+      <li><a href="#limits">What these results do not show</a></li>
+      <li><a href="#next">What comes next</a></li>
+      <li><a href="#files">Files and commands</a></li>
+    </ol>
+  </nav>
+
+  <!-- ===================== 1 Words ===================== -->
+  <section id="words" class="stack">
+    <div class="col stack"><h2>Words used on this page</h2></div>
+    <div class="words">
+      <div class="word"><b>MonetDB</b><p>A free database program from the research institute CWI in Amsterdam. Peter Boncz and Martin Kersten, two of the radix-join paper's authors, built it.</p></div>
+      <div class="word"><b>Column</b><p>MonetDB keeps each column of a table as its own long list of values. MonetDB's code calls such a list a <code>BAT</code>.</p></div>
+      <div class="word"><b>Kernel</b><p>The bottom layer of MonetDB: the C code that does the work on columns, such as joining two of them. Its folder is <code>gdk/</code>.</p></div>
+      <div class="word"><b>Hash join</b><p>Put every row of table R into a table of boxes, chosen by a number worked out from its key. Then, for every row of S, look only in the box its key points to.</p></div>
+      <div class="word"><b>Radix join</b><p>The paper's join. First cut R and S into pieces by a few bits of each key's mixed number, then hash-join piece by piece, so each small hash table fits in the processor's cache.</p></div>
+      <div class="word"><b>Radix bits</b><p>How many bits choose the piece. B bits give 2<sup>B</sup> pieces: 11 bits give 2,048 pieces.</p></div>
+      <div class="word"><b>Pass</b><p>One trip through a whole table to cut it. With 2 passes, 10 bits are cut as 5 + 5.</p></div>
+      <div class="word"><b>Rows per box</b><p>How full a hash table is. 1/8 means 8 boxes for every row. The code calls a box a "bucket"; the list that links rows in the same box is the "link" list.</p></div>
+      <div class="word"><b>Key mixer</b><p>The small formula that turns a key into a scrambled number, so that keys spread evenly over the pieces and boxes. The tuner uses SplitMix64; Boncz used his own.</p></div>
+      <div class="word"><b>ns per row</b><p>The time of one whole join in nanoseconds (billionths of a second), divided by the rows in one table. Lower is faster.</p></div>
+      <div class="word"><b>Round</b><p>One run of every setting being compared, in a newly shuffled order, so a slow moment of the laptop lands on a different setting each time.</p></div>
+      <div class="word"><b>Checksum</b><p>One number summed from every matching pair of rows. Two joins with the same checksum and the same number of matches found the same pairs.</p></div>
+    </div>
+  </section>
+
+  <!-- ===================== 2 Layers ===================== -->
+  <section id="layers" class="stack">
+    <div class="col stack"><h2>How a join runs in MonetDB today</h2>
+      <p>A join written in the database language SQL goes down through 5 layers before any row is touched. Only the bottom layer does the join itself, and that is the layer our programs call directly.</p></div>
+    <div class="panel">
+      <div class="flow">
+        <div><i>sql/server/</i><b>1. Read the question</b>The SQL text is checked and turned into a plan of table operations: "join R and S where the keys are equal".</div>
+        <div><i>sql/backends/monet5/rel_bin.c</i><b>2. Write a program</b>The plan becomes a list of instructions in MonetDB's own language, MAL. The join becomes one instruction, <code>algebra.join</code>.</div>
+        <div><i>monetdb5/optimizer/</i><b>3. Rewrite the program</b>MonetDB's optimizers rewrite the list. For threads, one of them (<code>opt_mitosis.c</code>) cuts the biggest table into row ranges, one join per range. It never cuts by key.</div>
+        <div><i>monetdb5/modules/kernel/algebra.c</i><b>4. Run the program</b>The instruction <code>algebra.join</code> calls the C function <code>ALGjoin</code>, which calls the kernel's <code>BATjoin</code>.</div>
+        <div><i>gdk/gdk_join.c:4886</i><b>5. Join the columns</b><code>BATjoin</code> picks a method and joins two columns. It returns two lists: the row positions of every matching pair.</div>
+      </div>
+      <h3>How <code>BATjoin</code> picks its method</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>If</th><th>Then</th></tr></thead>
+        <tbody>
+          <tr><td>Both columns are sorted</td><td>Merge join: walk down both lists side by side.</td></tr>
+          <tr><td>One column is sorted, and searching it is cheaper by MonetDB's estimate</td><td>For each row of the other column, find its key in the sorted one by halving the search range.</td></tr>
+          <tr><td>Otherwise (the tuner's data: both shuffled)</td><td>Hash join with one hash table on all of one column. A cost estimate (<code>joincost</code>) picks which column gets the table.</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Its hash table</h3>
+      <div class="design">
+        <div>Boxes</div><div>Rows × 8/7, at least 256 (<code>HASHmask</code>, <code>gdk/gdk_private.h:186</code>). That is 0.875 rows per box, fixed.</div>
+        <div>Links</div><div>One per row, to chain rows that land in the same box.</div>
+        <div>Entry size</div><div>2 bytes up to 65,535 rows, 4 bytes up to 4,294,967,295 rows, else 8 bytes (<code>HASHwidth</code>, <code>gdk/gdk_hash.c:42</code>).</div>
+        <div>Kept</div><div>The table stays attached to the column after the join, is used again by the next join on that column, and is saved to disk for stored tables.</div>
+      </div>
+      <h3>The new pipeline engine</h3>
+      <p>MonetDB 2026 also has a second, newer way to run queries, called the pipeline engine. It is off unless turned on (<code>SET pipeline = true</code>; the default is in <code>mal_client.c:57</code>). Its join uses one shared hash table sized at the estimated rows × 2.52, rounded up to a power of 2. It does not cut by key either.</p>
+      <h3>A first look through SQL, not saved</h3>
+      <p>To check that the build works end to end, we started the MonetDB server, made two tables of 16,777,216 rows with 8-byte keys, and ran <code>SELECT sum(r.k) + sum(s.k) FROM r JOIN s ON r.k = s.k</code> 5 times in each of 3 ways. Its plan showed the one <code>algebra.join</code> instruction. The data is not the tuner's (R's keys are 0 to 16,777,215 in a mixed order; S's are spread over twice that range), so these times are not comparable with the rest of this page.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>How the query ran</th><th class="num">5 runs, milliseconds</th></tr></thead>
+        <tbody>
+          <tr><td>1 thread (<code>sequential_pipe</code>)</td><td class="num">1,682 · 1,002 · 1,003 · 983 · 1,024</td></tr>
+          <tr><td>MonetDB's default plan, tables cut into row ranges for threads (<code>default_pipe</code>)</td><td class="num">222 · 216 · 213 · 230 · 207</td></tr>
+          <tr><td>The new pipeline engine (<code>SET pipeline = true</code>)</td><td class="num">343 · 282 · 223 · 189 · 207</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">One-off check, not in the repository. The tables are in <code>m5-pro/monetdb/dbfarm/demo/</code>, which is not committed. <code>count(*)</code> was not used because MonetDB rewrites that query into a different instruction (<code>algebra.intersect</code>).</p>
+    </div>
+  </section>
+
+  <!-- ===================== 3 History ===================== -->
+  <section id="history" class="stack">
+    <div class="col stack"><h2>The radix join MonetDB used to have</h2>
+      <p>Peter Boncz wrote a radix join module for MonetDB, in the file <code>radix.mx</code>: <code>radix_cluster</code> cuts a column into pieces and <code>phash_join</code> joins two cut columns piece by piece. MonetDB's history shows when it went away.</p></div>
+    <div class="panel">
+      <div class="tablewrap"><table>
+        <thead><tr><th>Date</th><th>What happened</th><th>Commit</th></tr></thead>
+        <tbody>
+          <tr class="pick"><td class="num">2007-09-12</td><td>The last version of MonetDB that compiled the radix module. Our copy is made from this one.</td><td><code>33a91903a7</code></td></tr>
+          <tr><td class="num">2007-10-04</td><td>The build file turned it off (<code>#radix.mx</code>) in a large merge called "Merged GDK-2 branch".</td><td><code>892ef9b796</code></td></tr>
+          <tr><td class="num">2007 to 2012</td><td>The file stayed in the source code without being compiled. The older MonetDB4 line had it turned off by 2011 too.</td><td></td></tr>
+          <tr><td class="num">2012-03-28</td><td>The file was deleted.</td><td><code>0adbe4238f</code></td></tr>
+        </tbody>
+      </table></div>
+      <ul class="clean">
+        <li>The core functions are the same in the 2007 and 2011 copies, apart from renamed variables and one fix so a shift works on 64-bit computers.</li>
+        <li>It never ran by itself. SQL never used it. A person wrote the plan by hand and typed the bits of every pass, for example <code>radix_cluster(b, 6, 5)</code>.</li>
+        <li>An earlier version of the notes said the last release with the radix join was Dec2011-SP2. That was wrong, and was corrected on 26 November: Dec2011-SP2 still contains the file, but does not compile it.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== 4 Who picks ===================== -->
+  <section id="who" class="stack">
+    <div class="col stack"><h2>Who picks the settings</h2>
+      <p>A radix join has 3 settings: how many bits, how many passes, and how full each hash table is. MonetDB never timed any of them.</p></div>
+    <div class="panel"><div class="tablewrap"><table>
+      <thead><tr><th></th><th>MonetDB today</th><th>Boncz's radix join (2007)</th><th>The tuner</th></tr></thead>
+      <tbody>
+        <tr><td>Cuts by key first?</td><td>No</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>Bits and passes</td><td>None</td><td>Typed by hand into each plan</td><td>Timed on this computer: 0 to 18 bits, 1 to 3 passes</td></tr>
+        <tr><td>Rows per box</td><td>0.875, fixed</td><td>The smallest power of 2 at least the average piece size, fixed: exactly 1 row per box at all 4 sizes here</td><td>Timed: 1/8 to 4</td></tr>
+      </tbody>
+    </table></div></div>
+  </section>
+
+  <!-- ===================== 5 Experiment 1 ===================== -->
+  <section id="exp1" class="stack">
+    <div class="col stack"><h2>Experiment 1: MonetDB's join on the tuner's data</h2>
+      <p>A small C program starts MonetDB's kernel inside itself, with no server and no SQL. It makes the tuner's two tables with the tuner's own code, copies their keys into MonetDB columns, calls <code>BATjoin</code>, and checks the number of matches and the checksum against the tuner's answer. It went in 4 steps, each checked before the next.</p></div>
+    <div class="panel">
+      <div class="design">
+        <div>Data</div><div>The tuner's: N rows per table. R's keys are 0 to N−1; S's keys are 0, 2, 4, …, so half of S finds a match. Both shuffled with seed 42.</div>
+        <div>MonetDB</div><div>Downloaded at commit <code>f17907b909</code> (25 November 2026, version 56.0.0) and built with its release settings by <code>setup.sh</code>.</div>
+        <div>Tuner's join</div><div>Its own code, unchanged, at its picks from the race of 24 November.</div>
+        <div>Thread</div><div>The tuner's join uses 1 thread. Our program calls MonetDB's join directly, below layer 3, which is where MonetDB splits work across threads. I did not check whether <code>BATjoin</code> itself ever uses more than 1 thread.</div>
+      </div>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Step</th><th>What it checked</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td>Can our program call <code>BATjoin</code> at all? 10 rows.</td><td>Same 5 matches and checksum <code>21fe97ca324d8a4d</code> as the tuner's slow, row-by-row join.</td></tr>
+          <tr><td class="num">2</td><td>One join at 1,048,576 rows: which method MonetDB picks.</td><td>Hash join, table on R, the same side the tuner uses. One run: 40.70 ns per row against the tuner's 9.95.</td></tr>
+          <tr><td class="num">3</td><td>Where MonetDB's time goes: building the hash table, or looking rows up in it.</td><td>Looking up is 68% of the time at 1,048,576 rows and 73% at 16,777,216.</td></tr>
+          <tr><td class="num">4</td><td>MonetDB against the tuner's pick: 4 sizes, 10 shuffled rounds, as in the race.</td><td>Tuner faster in 40 of 40 rounds.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Step 2: what MonetDB did, from its own messages</h3>
+      <ol class="steps">
+        <li>Checked whether either column is sorted. Neither is; this took under 1 ms.</li>
+        <li>Looked at 1,000 rows of each column to guess how many different keys there are. All 1,000 differed.</li>
+        <li>Picked a hash join and built a new hash table on R.</li>
+        <li>Made 1,198,372 boxes (1,048,576 × 8/7), plus one link per row. 685,625 boxes got at least one row.</li>
+      </ol>
+
+      <h3>Step 3: building against looking up</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Average, ns per row</th><th class="num">1,048,576 rows (5 repeats)</th><th class="num">16,777,216 rows (3 repeats)</th><th class="num">16M ÷ 1M</th></tr></thead>
+        <tbody>
+          <tr><td>Build the hash table (<code>BAThash</code>)</td><td class="num">12.39</td><td class="num">21.82</td><td class="num">1.76</td></tr>
+          <tr><td>Look up every row of S (<code>BATjoin</code> with the table already there)</td><td class="num">26.03</td><td class="num">58.68</td><td class="num">2.25</td></tr>
+          <tr><td>Build + look up</td><td class="num">38.42</td><td class="num">80.50</td><td class="num">2.10</td></tr>
+          <tr><td>Whole <code>BATjoin</code> on new columns</td><td class="num">43.68</td><td class="num">82.97</td><td class="num">1.90</td></tr>
+        </tbody>
+      </table></div>
+      <p>At 16,777,216 rows MonetDB's hash table and keys take about 211 MB: boxes 77 MB, links 67 MB, keys 67 MB. The M5's second cache holds 16 MB. So most lookups wait for main memory, which is the slowdown the radix join was invented to avoid.</p>
+
+      <div class="stack"><div class="eyebrow">Step 4 · average of 10 rounds</div><h3>Time per row at each size</h3></div>
+      <div class="legend" id="lg-exp1"></div>
+      <div class="chart" id="ch-exp1"></div>
+      <details><summary>Show the numbers</summary><div class="tablewrap" id="tb-exp1"></div></details>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Rows per table</th><th>Tuner's pick</th><th class="num">Tuner, ns per row (fastest to slowest)</th><th class="num">MonetDB, ns per row (fastest to slowest)</th><th class="num">MonetDB took</th><th class="num">Rounds the tuner won</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1,048,576</td><td>11 bits, 1 pass, 1/8</td><td class="num">9.20 (9.01 to 9.53)</td><td class="num">41.19 (39.76 to 45.41)</td><td class="num">4.48×</td><td class="num">10 of 10</td></tr>
+          <tr><td class="num">4,194,304</td><td>12 bits, 1 pass, 1/8</td><td class="num">9.53 (9.32 to 9.84)</td><td class="num">69.63 (67.39 to 73.20)</td><td class="num">7.31×</td><td class="num">10 of 10</td></tr>
+          <tr><td class="num">8,388,608</td><td>12 bits, 1 pass, 1/8</td><td class="num">10.23 (10.02 to 10.59)</td><td class="num">80.59 (79.45 to 83.18)</td><td class="num">7.88×</td><td class="num">10 of 10</td></tr>
+          <tr><td class="num">16,777,216</td><td>10 bits, 1 pass, 1/8</td><td class="num">10.96 (10.30 to 15.57)</td><td class="num">86.15 (83.47 to 88.55)</td><td class="num">7.86×</td><td class="num">10 of 10</td></tr>
+        </tbody>
+      </table></div>
+      <div class="result"><span class="k">Result</span>
+        <ul class="clean">
+          <li>The tuner's pick beat MonetDB's join in all 40 of 40 rounds. MonetDB took 4.48 times as long at 1,048,576 rows and 7.31 to 7.88 times from 4,194,304 rows up.</li>
+          <li>From 1,048,576 to 16,777,216 rows the tuner's join slowed down 1.19 times, MonetDB's 2.09 times. The radix join keeps each piece's hash table in the cache; MonetDB's one table stops fitting.</li>
+          <li>MonetDB's time includes 1.07 to 2.40 ns per row to turn its list of pairs into the tuner's checksum, because the tuner's join makes its checksum inside its own timing. The rest, 40.12 to 83.75 ns per row, is <code>BATjoin</code>.</li>
+          <li>MonetDB said "hashjoin using new hash; create hash" in all 40 of its timed joins: it built a new table every time and never reused one.</li>
+        </ul></div>
+      <p class="note">Run <code>m5-pro/monetdb/exp1-monetdb-join/runs/apple-m5_2026-11-26_044643_step4/</code>, 31.5 seconds.</p>
+    </div>
+  </section>
+
+  <!-- ===================== 6 Experiment 2 ===================== -->
+  <section id="exp2" class="stack">
+    <div class="col stack"><h2>Experiment 2: Boncz's radix join, copied</h2>
+      <p>We copied <code>radix_cluster</code> and <code>phash_join</code> from the 2007 file into one C file of 340 lines, <code>boncz_radix.h</code>, that works on the tuner's rows. Next to each function it names the line of the original it comes from, so every line can be checked. MonetDB's license covers the original, so the original is not committed; <code>fetch-original.sh</code> saves it from MonetDB's history. The copy needs no MonetDB build.</p></div>
+    <div class="panel">
+      <h3>Same idea, different details</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th></th><th>Tuner's join</th><th>Boncz's join (MonetDB 2007)</th></tr></thead>
+        <tbody>
+          <tr><td>Key mixer</td><td>SplitMix64 (<code>mix</code>)</td><td><code>(x&gt;&gt;7) ^ (x&gt;&gt;13) ^ (x&gt;&gt;21) ^ x</code> (<code>int_HUSSLE</code>, radix.mx:1270)</td></tr>
+          <tr><td>One pass of cutting</td><td>Count every row's piece, then move every row: 2 reads of the table</td><td>Give every piece an equal share of space and move rows until one share is full. Then guess the rest from what was moved, or count it, shift the pieces to make room, and finish. If no share fills up: 1 read (radix.mx:2053)</td></tr>
+          <tr><td>Finding the pieces when joining</td><td>A list of where each piece starts</td><td>Walk both cut tables side by side and find runs of rows with the same piece number (radix.mx:2791)</td></tr>
+          <tr><td>Hash tables</td><td>One per piece; boxes = rows ÷ rows per box, a setting</td><td>One, reused and emptied for each piece; boxes = the smallest power of 2 at least R's average piece size</td></tr>
+          <tr><td>Box and link entries</td><td>4 bytes</td><td>8 bytes (2007's default on 64-bit computers)</td></tr>
+        </tbody>
+      </table></div>
+      <h3>What the copy changes, and why</h3>
+      <ul class="clean">
+        <li><b>Rows:</b> the tuner's 8-byte rows (a 4-byte key and a 4-byte row number), so both joins read the same data. Boncz's original rows were about 12 bytes. The two byte limits in his code are turned into row counts: 32,768 bytes became 4,096 rows.</li>
+        <li><b>Memory:</b> each pass writes into memory the tuner sets up before the clock starts. The original made a new column for every pass. The small arrays (counts, hash table) are still made inside the join, as in the original.</li>
+        <li><b>Matches:</b> each match is added to the checksum, as the tuner's join does, instead of being written out.</li>
+        <li><b>Stopping early:</b> the original stopped at the first match when R's keys were known to be unique. The copy can do both, and the timed runs never stop early, like the tuner.</li>
+        <li><b>Safety:</b> one copy of memory onto itself uses <code>memmove</code>, which is defined when the two areas overlap, instead of <code>memcpy</code>.</li>
+      </ul>
+
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Step</th><th>What it checked</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td>Right answers? 12 table sizes from 1 to 262,144 rows (odd sizes too, so pieces are uneven), every bits setting the tuner allows, 1 to 3 passes, with and without stopping early. Nothing timed.</td><td>486 of 486 right.</td></tr>
+          <tr><td class="num">2</td><td>1,048,576 rows, both joins at the tuner's pick (11 bits, 1 pass), 5 repeats.</td><td>Boncz 9.64 ns per row, tuner 10.14: 0.95 times the tuner's time, faster in 5 of 5.</td></tr>
+          <tr><td class="num">3</td><td>4 sizes, 10 shuffled rounds: the tuner's join, Boncz's at the tuner's bits, Boncz's at the paper's formula.</td><td>See below.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Step 1: how Boncz's cuts finished</h3>
+      <p>Across all 486 checks his code made 34,420 cuts. 30,964 of them (90.0%) fitted the equal shares and read the table once. 3,456 (10.0%) had to count the rest, 6 of those after first guessing it. The tuner's keys are consecutive numbers, and his mixer spreads consecutive numbers almost evenly, so his "equal shares" guess is usually right on this data.</p>
+
+      <div class="stack"><div class="eyebrow">Step 3 · average of 10 rounds</div><h3>Time per row at each size</h3></div>
+      <div class="legend" id="lg-exp2"></div>
+      <div class="chart" id="ch-exp2"></div>
+      <details><summary>Show the numbers</summary><div class="tablewrap" id="tb-exp2"></div></details>
+      <div class="tablewrap"><table>
+        <thead><tr><th class="num">Rows per table</th><th class="num">Tuner's join at its pick</th><th class="num">Boncz at the same bits and passes</th><th class="num">Boncz took (rounds Boncz won)</th><th class="num">Boncz at the paper's formula</th><th class="num">Took (rounds won)</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1,048,576</td><td class="num">11 bits, 1 pass: 9.35</td><td class="num">8.69</td><td class="num">0.93× (10 of 10)</td><td class="num">7 bits, 2 passes: 12.50</td><td class="num">1.34× (0 of 10)</td></tr>
+          <tr><td class="num">4,194,304</td><td class="num">12 bits, 1 pass: 9.64</td><td class="num">9.23</td><td class="num">0.96× (10 of 10)</td><td class="num">9 bits, 2 passes: 11.31</td><td class="num">1.17× (0 of 10)</td></tr>
+          <tr><td class="num">8,388,608</td><td class="num">12 bits, 1 pass: 10.19</td><td class="num">9.95</td><td class="num">0.98× (8 of 10)</td><td class="num">10 bits, 2 passes: 11.63</td><td class="num">1.14× (0 of 10)</td></tr>
+          <tr><td class="num">16,777,216</td><td class="num">10 bits, 1 pass: 10.45</td><td class="num">10.78</td><td class="num">1.03× (0 of 10)</td><td class="num">11 bits, 2 passes: 12.34</td><td class="num">1.18× (0 of 10)</td></tr>
+        </tbody>
+      </table></div>
+      <details><summary>Fastest to slowest of each setting</summary><div class="tablewrap"><table>
+        <thead><tr><th class="num">Rows per table</th><th class="num">Tuner's join</th><th class="num">Boncz at the tuner's bits</th><th class="num">Boncz at the paper's formula</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1,048,576</td><td class="num">9.18 to 9.58</td><td class="num">8.49 to 8.97</td><td class="num">12.35 to 13.04</td></tr>
+          <tr><td class="num">4,194,304</td><td class="num">9.50 to 9.88</td><td class="num">9.02 to 9.52</td><td class="num">11.25 to 11.41</td></tr>
+          <tr><td class="num">8,388,608</td><td class="num">10.08 to 10.49</td><td class="num">9.59 to 10.94</td><td class="num">11.45 to 11.93</td></tr>
+          <tr><td class="num">16,777,216</td><td class="num">10.34 to 10.61</td><td class="num">10.69 to 11.15</td><td class="num">12.13 to 12.57</td></tr>
+        </tbody>
+      </table></div></details>
+      <div class="result"><span class="k">Result</span>
+        <ul class="clean">
+          <li>At the tuner's bits and passes, Boncz's 2007 join beat the tuner's join up to 8,388,608 rows (28 of 30 rounds) and lost at 16,777,216 (0 of 10).</li>
+          <li>None of his cuts in the 80 timed Boncz joins had to count: every cut fitted the equal shares, so each table was read once per pass. The tuner's join always reads it twice.</li>
+          <li>At the paper's formula, Boncz's join lost to the tuner's pick in 40 of 40 rounds, taking 1.14 to 1.34 times as long.</li>
+        </ul></div>
+      <p class="note">Run <code>m5-pro/monetdb/exp2-boncz-radix/runs/apple-m5_2026-11-26_050245_step3/</code>, 11.7 seconds. Settings copied from the race's plan of 24 November.</p>
+    </div>
+  </section>
+
+  <!-- ===================== 7 Limits ===================== -->
+  <section id="limits" class="stack">
+    <div class="col stack"><h2>What these results do not show</h2></div>
+    <div class="panel">
+      <div class="design">
+        <div>Exp. 1: memory</div><div><span class="tag warn">open</span> MonetDB makes the memory for its hash table and its two result lists inside the timed join. The tuner's join uses memory set up before the clock starts. How much of MonetDB's time that is has not been measured.</div>
+        <div>Exp. 1: output</div><div><span class="tag warn">open</span> MonetDB writes out every matching pair: two lists of 524,288 positions at 1,048,576 rows. The tuner's join only adds them up. A database needs the pairs to fetch other columns afterwards.</div>
+        <div>Exp. 1: tuner's speed</div><div><span class="tag warn">open</span> The tuner's pick ran faster here than in the race of 24 November with the same code and settings: 9.20 against 10.51 ns per row at 1,048,576 rows. Here it alternated only with MonetDB; in the race, with 4 other settings. Why has not been tested.</div>
+        <div>Exp. 2: the data</div><div><span class="tag warn">open</span> Boncz's lead comes with cuts that never had to count, which happens because the tuner's keys are consecutive. Uneven keys would make his cuts count too. Not tested.</div>
+        <div>Exp. 2: the picks</div><div><span class="tag warn">open</span> The tuner's picks were found for the tuner's join. Boncz's join may have different best settings. Not tested yet: that is the next step.</div>
+        <div>Exp. 2: 16M rows</div><div><span class="tag warn">open</span> Why Boncz's join loses at 16,777,216 rows has not been tested. Two differences that could matter: his entries are 8 bytes against the tuner's 4, and his hash tables hold 1 row per box against the tuner's 1/8.</div>
+        <div>Both</div><div><span class="tag warn">open</span> 1 thread, 1 machine, 1 data set (unique keys, both tables the same size, half of S matching), 1 run of each experiment.</div>
+        <div>Answers</div><div><span class="tag good">checked</span> Every timed join's matches and checksum were checked against the tuner's expected answer. A wrong answer stops the program.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 8 Next ===================== -->
+  <section id="next" class="stack col">
+    <h2>What comes next</h2>
+    <ol class="clean">
+      <li><b>Let the tuner search Boncz's settings</b> (experiment 2, step 4). The tuner's search can only time the tuner's own join. Two ways: add a switch to <code>tuner/src/tune.c</code> that changes nothing unless it is turned on, or copy the search into the experiment 2 folder. Waiting for your choice.</li>
+      <li><b>Uneven keys.</b> Run both radix joins on keys that bunch up, to see whether Boncz's one-read cut still wins once it has to count.</li>
+      <li><b>Find the 16M-row loss.</b> Change Boncz's join one detail at a time at 16,777,216 rows: 4-byte entries, then 1/8 row per box.</li>
+      <li><b>MonetDB's memory cost.</b> Time how long MonetDB spends getting memory inside its join, to make experiment 1 fairer.</li>
+    </ol>
+  </section>
+
+  <!-- ===================== 9 Files ===================== -->
+  <section id="files" class="stack">
+    <div class="col stack"><h2>Files and commands</h2></div>
+    <div class="panel"><div class="tablewrap"><table>
+      <thead><tr><th>What</th><th>Where</th></tr></thead>
+      <tbody>
+        <tr><td>Notes for every step, with every number</td><td><code>m5-pro/monetdb/README.md</code></td></tr>
+        <tr><td>Download and build MonetDB at commit <code>f17907b909</code></td><td><code>cd m5-pro/monetdb &amp;&amp; ./setup.sh</code>; MonetDB's code and build stay out of the repository</td></tr>
+        <tr><td>Experiment 1: the programs (496 lines of C)</td><td><code>m5-pro/monetdb/exp1-monetdb-join/src/</code></td></tr>
+        <tr><td>Experiment 1: the run of 26 November</td><td><code>exp1-monetdb-join/runs/apple-m5_2026-11-26_044643_step4/</code>: <code>trials.csv</code>, <code>summary.csv</code>, <code>plan.csv</code>, <code>machine.txt</code></td></tr>
+        <tr><td>Rerun experiment 1, about 30 seconds</td><td><code>cd m5-pro/monetdb/exp1-monetdb-join &amp;&amp; ./run.sh</code>, then <code>python3 summarize.py runs/&lt;folder&gt;</code></td></tr>
+        <tr><td>Experiment 2: the copy of Boncz's join (340 lines of C)</td><td><code>m5-pro/monetdb/exp2-boncz-radix/src/boncz_radix.h</code></td></tr>
+        <tr><td>Save the 2007 original next to it</td><td><code>cd m5-pro/monetdb/exp2-boncz-radix &amp;&amp; ./fetch-original.sh</code> (needs <code>setup.sh</code> first)</td></tr>
+        <tr><td>Experiment 2: the 486 correctness checks</td><td><code>make step1 &amp;&amp; ./bin/step1</code></td></tr>
+        <tr><td>Experiment 2: the run of 26 November</td><td><code>exp2-boncz-radix/runs/apple-m5_2026-11-26_050245_step3/</code></td></tr>
+        <tr><td>Rerun experiment 2, about 12 seconds</td><td><code>cd m5-pro/monetdb/exp2-boncz-radix &amp;&amp; ./run.sh</code>, then <code>python3 summarize.py runs/&lt;folder&gt;</code></td></tr>
+        <tr><td>Git branch</td><td><code>m5-pro-monetdb</code>, on top of <code>m5-pro-artifacts</code></td></tr>
+      </tbody>
+    </table></div></div>
+  </section>
+
+  <footer class="col">Made on 27 November 2026 from <code>m5-pro/monetdb/</code> and its runs of 26 November. Times are averages of their runs, in ns per row unless marked.</footer>
+  <div id="tip" hidden></div>
+</div>
+
+<script>
+const tip = document.getElementById("tip");
+
+function draw(id, c) {
+  const W = 760, H = 300, L = 58, Rr = 190, T = 14, B = 46;
+  const allX = [...new Set(c.series.flatMap((s) => s.pts.map((p) => p[0])))].sort((a, b) => a - b);
+  const ys = c.series.flatMap((s) => s.pts.map((p) => p[1])).concat(c.ref ? [c.ref] : []);
+  const ymax0 = Math.max(...ys) * 1.08;
+  const raw = ymax0 / 5, e = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / e;
+  const step = (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * e;
+  const ymax = Math.ceil(ymax0 / step) * step;
+  const xv = (x) => c.xLog ? Math.log2(x) : x;
+  const x0 = xv(allX[0]), x1 = xv(allX[allX.length - 1]);
+  const X = (x) => L + (W - L - Rr) * (xv(x) - x0) / (x1 - x0 || 1);
+  const Y = (y) => T + (H - T - B) * (1 - y / ymax);
+  const tl = (t) => c.xLabels ? c.xLabels[c.xTicks.indexOf(t)] : String(t);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${c.yLabel} by ${c.xLabel}">`;
+  for (let v = 0; v <= ymax + 1e-9; v += step) {
+    s += `<line x1="${L}" x2="${W - Rr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1"/>`;
+    s += `<text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="var(--mono)">${v}</text>`;
+  }
+  for (const t of c.xTicks) s += `<text x="${X(t)}" y="${H - B + 18}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="var(--mono)">${tl(t)}</text>`;
+  s += `<text x="${(L + W - Rr) / 2}" y="${H - 6}" text-anchor="middle" font-size="12" fill="var(--muted)">${c.xLabel}</text>`;
+  s += `<text x="14" y="${T + (H - T - B) / 2}" text-anchor="middle" font-size="12" fill="var(--muted)" transform="rotate(-90 14 ${T + (H - T - B) / 2})">${c.yLabel}</text>`;
+  s += `<line x1="${L}" x2="${W - Rr}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--muted)" stroke-width="1"/>`;
+  const ends = [];
+  if (c.ref) {
+    s += `<line x1="${X(allX[0])}" x2="${X(allX[allX.length - 1])}" y1="${Y(c.ref)}" y2="${Y(c.ref)}" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+    ends.push({ y: Y(c.ref), x: X(allX[allX.length - 1]), name: c.refName, fill: "var(--muted)" });
+  }
+  c.series.forEach((se) => {
+    s += `<polyline points="${se.pts.map((p) => X(p[0]) + "," + Y(p[1])).join(" ")}" fill="none" stroke="var(${se.c})" stroke-width="2" stroke-linejoin="round"/>`;
+    se.pts.forEach((p) => { s += `<circle cx="${X(p[0])}" cy="${Y(p[1])}" r="4" fill="var(${se.c})" stroke="var(--surface)" stroke-width="2"/>`; });
+    const lp = se.pts[se.pts.length - 1];
+    ends.push({ y: Y(lp[1]), x: X(lp[0]), name: se.name, fill: "var(--fg-2)" });
+  });
+  ends.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 15) ends[i].y = ends[i - 1].y + 15;
+  ends.forEach((en) => { s += `<text x="${en.x + 10}" y="${en.y + 4}" font-size="11.5" fill="${en.fill}">${en.name}</text>`; });
+  s += `<line id="${id}-cross" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/>`;
+  s += `<rect x="${L - 10}" y="${T}" width="${W - L - Rr + 20}" height="${H - T - B}" fill="transparent" id="${id}-hit"/></svg>`;
+  const el = document.getElementById("ch-" + id);
+  el.innerHTML = s;
+  document.getElementById("lg-" + id).innerHTML = c.series.map((se) => `<span><i class="sw" style="border-color:var(${se.c})"></i>${se.name}</span>`).join("")
+    + (c.ref ? `<span><i class="sw dash" style="border-color:var(--muted)"></i>${c.refName}</span>` : "");
+  const svg = el.querySelector("svg"), cross = el.querySelector(`#${id}-cross`), hit = el.querySelector(`#${id}-hit`);
+  hit.addEventListener("mousemove", (ev) => {
+    const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    let best = allX[0];
+    for (const x of allX) if (Math.abs(X(x) - loc.x) < Math.abs(X(best) - loc.x)) best = x;
+    cross.setAttribute("x1", X(best)); cross.setAttribute("x2", X(best)); cross.setAttribute("visibility", "visible");
+    const lines = c.series.map((se) => { const p = se.pts.find((q) => q[0] === best); return p ? `${se.name}: ${p[1].toFixed(2)} ns` : null; }).filter(Boolean);
+    if (c.ref) lines.push(`${c.refName}: ${c.ref.toFixed(2)} ns`);
+    tip.innerHTML = `<b>${tl(best)}${c.xUnit}</b><br>` + lines.join("<br>");
+    tip.hidden = false; tip.style.left = (ev.clientX + 14) + "px"; tip.style.top = (ev.clientY - 20) + "px";
+  });
+  hit.addEventListener("mouseleave", () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); });
+  let t = `<table><thead><tr><th class="num">${c.xLabel}</th>` + c.series.map((se) => `<th class="num">${se.name}</th>`).join("") + (c.ref ? `<th class="num">${c.refName}</th>` : "") + `</tr></thead><tbody>`;
+  for (const x of allX) {
+    t += `<tr><td class="num">${tl(x)}</td>` + c.series.map((se) => { const p = se.pts.find((q) => q[0] === x); return `<td class="num">${p ? p[1].toFixed(2) : "–"}</td>`; }).join("") + (c.ref ? `<td class="num">${c.ref.toFixed(2)}</td>` : "") + `</tr>`;
+  }
+  document.getElementById("tb-" + id).innerHTML = t + `</tbody></table><p class="note">${c.note}</p>`;
+}
+
+const SIZES = [1048576, 4194304, 8388608, 16777216];
+const AXIS = { xLog: true, xTicks: SIZES, xLabels: SIZES.map((n) => n.toLocaleString("en-US")), xLabel: "rows per table", xUnit: " rows", yLabel: "ns per row", note: "ns per row, average of 10 runs." };
+draw("exp1", { ...AXIS, series: [
+  { name: "MonetDB BATjoin", c: "--s2", pts: [[1048576, 41.19], [4194304, 69.63], [8388608, 80.59], [16777216, 86.15]] },
+  { name: "Tuner's pick", c: "--s1", pts: [[1048576, 9.20], [4194304, 9.53], [8388608, 10.23], [16777216, 10.96]] },
+] });
+draw("exp2", { ...AXIS, series: [
+  { name: "Boncz, paper's formula", c: "--s2", pts: [[1048576, 12.50], [4194304, 11.31], [8388608, 11.63], [16777216, 12.34]] },
+  { name: "Tuner's join", c: "--s1", pts: [[1048576, 9.35], [4194304, 9.64], [8388608, 10.19], [16777216, 10.45]] },
+  { name: "Boncz, tuner's bits", c: "--s3", pts: [[1048576, 8.69], [4194304, 9.23], [8388608, 9.95], [16777216, 10.78]] },
+] });
+</script>
+</body>
+</html>

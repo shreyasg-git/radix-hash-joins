@@ -176,6 +176,11 @@ The CSV files are plain text with a header row, so any tool can read them.
 `artifacts/tuner.html` explains the tuner, how correct and fair it is, the
 paper's formulas worked out for the M5, and the race against them.
 
+`artifacts/monetdb.html` explains how MonetDB joins today, the radix join it
+had until 2007, and both of the MonetDB experiments (`monetdb/`) against the
+tuner's join. Also online (private to the owner):
+[MonetDB Join Experiments](https://claude.ai/artifact/DSrbRG8py2gyQMjoBKScCw).
+
 `artifacts/` also holds the two web pages made from these results. Double-click a
 file to open it in a browser; no login or server is needed. The fonts load
 from Google Fonts when online; offline the pages fall back to the system font.
